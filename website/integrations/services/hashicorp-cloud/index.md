@@ -1,22 +1,27 @@
 ---
-title: HashiCorp Cloud Platform
+title: Integrate with HashiCorp Cloud Platform
+sidebar_label: HashiCorp Cloud Platform
 ---
+
+# Integrate with HashiCorp Cloud Platform
 
 <span class="badge badge--secondary">Support level: Community</span>
 
 ## What is HashiCorp Cloud
 
-From https://cloud.hashicorp.com/
-
-:::note
-HashiCorp Cloud Platform is a fully managed platform for Terraform, Vault, Consul, and more.
-:::
+> HashiCorp Cloud Platform is a fully managed platform for Terraform, Vault, Consul, and more.
+>
+> -- https://cloud.hashicorp.com/
 
 ## Preparation
 
-The following placeholders will be used:
+The following placeholders are used in this guide:
 
--   `authentik.company` is the FQDN of authentik.
+- `authentik.company` is the FQDN of the authentik installation.
+
+:::note
+This documentation lists only the settings that you need to change from their default values. Be aware that any changes other than those explicitly mentioned in this guide could cause issues accessing your application.
+:::
 
 ### Step 1 - HashiCorp Cloud
 
@@ -34,19 +39,19 @@ Only settings that have been modified from default have been listed.
 
 **Protocol Settings**
 
--   Name: HashiCorp Cloud
--   ACS URL: _Value of **SSO Sign-On URL** from above_
--   Issuer: _Value of **Entity ID** from above_
--   Service Provider Binding: Post
--   Audience: _Value of **Entity ID** from above_
+- Name: HashiCorp Cloud
+- ACS URL: _Value of **SSO Sign-On URL** from above_
+- Issuer: _Value of **Entity ID** from above_
+- Service Provider Binding: Post
+- Audience: _Value of **Entity ID** from above_
 
 Open _Advanced protocol settings_, and ensure a signing certificate is selected, and all default property mappings are selected.
 
 Create an application which uses this provider. Optionally apply access restrictions to the application using policy bindings.
 
--   Name: HashiCorp Cloud
--   Slug: hashicorp-cloud
--   Provider: HashiCorp Cloud
+- Name: HashiCorp Cloud
+- Slug: hashicorp-cloud
+- Provider: HashiCorp Cloud
 
 ### Step 3 - HashiCorp Cloud
 

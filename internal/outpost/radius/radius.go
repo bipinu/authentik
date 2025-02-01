@@ -17,11 +17,13 @@ import (
 type ProviderInstance struct {
 	ClientNetworks []*net.IPNet
 	SharedSecret   []byte
+	MFASupport     bool
 
-	appSlug  string
-	flowSlug string
-	s        *RadiusServer
-	log      *log.Entry
+	appSlug    string
+	flowSlug   string
+	providerId int32
+	s          *RadiusServer
+	log        *log.Entry
 }
 
 type RadiusServer struct {

@@ -1,26 +1,31 @@
 ---
-title: Roundcube
+title: Integrate with Roundcube
+sidebar_label: Roundcube
 ---
+
+# Integrate with Roundcube
 
 <span class="badge badge--secondary">Support level: Community</span>
 
 ## What is Roundcube
 
-From https://roundcube.net
-
-:::note
-**Roundcube** is a browser-based multilingual IMAP client with an application-like user interface.
-It provides full functionality you expect from an email client, including MIME support, address book, folder manipulation, message searching and spell checking
-:::
+> **Roundcube** is a browser-based multilingual IMAP client with an application-like user interface.
+> It provides full functionality you expect from an email client, including MIME support, address book, folder manipulation, message searching and spell checking
+>
+> -- https://roundcube.net
 
 This integration describes how to use Roundcube's oauth support with authentik to automatically sign into an email account.
 The mail server must support XOAUTH2 for both SMTPD and IMAP/POP. Postfix SMTP server can also use Dovecot for authentication which provides Postfix with xoauth2 capability without configuring it separately.
 
 ## Preparation
 
-The following placeholders will be used:
+The following placeholders are used in this guide:
 
--   `authentik.company` is the FQDN of the authentik install.
+- `authentik.company` is the FQDN of the authentik installation.
+
+:::note
+This documentation lists only the settings that you need to change from their default values. Be aware that any changes other than those explicitly mentioned in this guide could cause issues accessing your application.
+:::
 
 Create a new oauth2 Scope Mapping which does not return the 'group' values and associate this mapping
 in the provider settings instead of the default oauth mapping.
@@ -40,9 +45,9 @@ return {
 
 Create an application in authentik. Create an _OAuth2/OpenID Provider_ with the following parameters:
 
--   Client Type: `Confidential`
--   Scopes: OpenID, Email, and the scope you created above
--   Signing Key: Select any available key
+- Client Type: `Confidential`
+- Scopes: OpenID, Email, and the scope you created above
+- Signing Key: Select any available key
 
 ## Roundcube Configuration
 
@@ -84,6 +89,6 @@ Outlook etc with no way to configure custom email servers.
 
 Please refer to the following for further configuration information:
 
--   https://roundcube.net
--   https://github.com/roundcube/roundcubemail/wiki/Configuration:-OAuth2
--   https://doc.dovecot.org/configuration_manual/authentication/oauth2/
+- https://roundcube.net
+- https://github.com/roundcube/roundcubemail/wiki/Configuration:-OAuth2
+- https://doc.dovecot.org/configuration_manual/authentication/oauth2/

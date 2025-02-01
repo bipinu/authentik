@@ -1,11 +1,14 @@
 """SCIM Client tests"""
+
 from django.test import TestCase
 from requests_mock import Mocker
 
 from authentik.blueprints.tests import apply_blueprint
+from authentik.core.models import Application
 from authentik.lib.generators import generate_id
 from authentik.providers.scim.clients.base import SCIMClient
 from authentik.providers.scim.models import SCIMMapping, SCIMProvider
+from authentik.providers.scim.tasks import scim_sync_all
 
 
 class SCIMClientTests(TestCase):
@@ -18,6 +21,11 @@ class SCIMClientTests(TestCase):
             url="https://localhost",
             token=generate_id(),
         )
+        self.app: Application = Application.objects.create(
+            name=generate_id(),
+            slug=generate_id(),
+        )
+        self.app.backchannel_providers.add(self.provider)
         self.provider.property_mappings.add(
             SCIMMapping.objects.get(managed="goauthentik.io/providers/scim/user")
         )
@@ -76,3 +84,7 @@ class SCIMClientTests(TestCase):
             SCIMClient(self.provider)
             self.assertEqual(mock.call_count, 1)
             self.assertEqual(mock.request_history[0].method, "GET")
+
+    def test_scim_sync_all(self):
+        """test scim_sync_all task"""
+        scim_sync_all()

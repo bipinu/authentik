@@ -1,16 +1,17 @@
 ---
-title: Wiki.js
+title: Integrate with Wiki.js
+sidebar_label: Wiki.js
 ---
+
+# Integrate with Wiki.js
 
 <span class="badge badge--secondary">Support level: Community</span>
 
 ## What is Wiki.js
 
-From https://en.wikipedia.org/wiki/Wiki.js
-
-:::note
-Wiki.js is a wiki engine running on Node.js and written in JavaScript. It is free software released under the Affero GNU General Public License. It is available as a self-hosted solution or using "single-click" install on the DigitalOcean and AWS marketplace.
-:::
+> Wiki.js is a wiki engine running on Node.js and written in JavaScript. It is free software released under the Affero GNU General Public License. It is available as a self-hosted solution or using "single-click" install on the DigitalOcean and AWS marketplace.
+>
+> -- https://en.wikipedia.org/wiki/Wiki.js
 
 :::note
 This is based on authentik 2022.11 and Wiki.js 2.5. Instructions may differ between versions.
@@ -18,10 +19,14 @@ This is based on authentik 2022.11 and Wiki.js 2.5. Instructions may differ betw
 
 ## Preparation
 
-The following placeholders will be used:
+The following placeholders are used in this guide:
 
--   `wiki.company` is the FQDN of Wiki.js.
--   `authentik.company` is the FQDN of authentik.
+- `wiki.company` is the FQDN of Wiki.js installation.
+- `authentik.company` is the FQDN of authentik installation.
+
+:::note
+This documentation lists only the settings that you need to change from their default values. Be aware that any changes other than those explicitly mentioned in this guide could cause issues accessing your application.
+:::
 
 ### Step 1
 
@@ -33,8 +38,8 @@ Add a _Generic OpenID Connect / OAuth2_ strategy and note the _Callback URL / Re
 
 In authentik, under _Providers_, create an _OAuth2/OpenID Provider_ with these settings:
 
--   Redirect URI: The _Callback URL / Redirect URI_ you noted from the previous step.
--   Signing Key: Select any available key
+- Redirect URI: The _Callback URL / Redirect URI_ you noted from the previous step.
+- Signing Key: Select any available key
 
 Note the _client ID_ and _client secret_, then save the provider. If you need to retrieve these values, you can do so by editing the provider.
 
@@ -44,15 +49,15 @@ Note the _client ID_ and _client secret_, then save the provider. If you need to
 
 In Wiki.js, configure the authentication strategy with these settings:
 
--   Client ID: Client ID from the authentik provider.
--   Client Secret: Client Secret from the authentik provider.
--   Authorization Endpoint URL: https://authentik.company/application/o/authorize/
--   Token Endpoint URL: https://authentik.company/application/o/token/
--   User Info Endpoint URL: https://authentik.company/application/o/userinfo/
--   Issuer: https://authentik.company/application/o/wikijs/
--   Logout URL: https://authentik.company/application/o/wikijs/end-session/
--   Allow self-registration: Enabled
--   Assign to group: The group to which new users logging in from authentik should be assigned.
+- Client ID: Client ID from the authentik provider.
+- Client Secret: Client Secret from the authentik provider.
+- Authorization Endpoint URL: https://authentik.company/application/o/authorize/
+- Token Endpoint URL: https://authentik.company/application/o/token/
+- User Info Endpoint URL: https://authentik.company/application/o/userinfo/
+- Issuer: https://authentik.company/application/o/wikijs/
+- Logout URL: https://authentik.company/application/o/wikijs/end-session/
+- Allow self-registration: Enabled
+- Assign to group: The group to which new users logging in from authentik should be assigned.
 
 ![](./wiki-js_strategy.png)
 

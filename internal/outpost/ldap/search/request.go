@@ -6,17 +6,18 @@ import (
 	"net"
 	"strings"
 
+	"beryju.io/ldap"
 	"github.com/getsentry/sentry-go"
 	"github.com/google/uuid"
-	"github.com/nmcclain/ldap"
 	log "github.com/sirupsen/logrus"
 	"goauthentik.io/internal/utils"
 )
 
 type Request struct {
 	ldap.SearchRequest
-	BindDN string
-	log    *log.Entry
+	BindDN            string
+	FilterObjectClass string
+	log               *log.Entry
 
 	id   string
 	conn net.Conn
@@ -26,7 +27,7 @@ type Request struct {
 func NewRequest(bindDN string, searchReq ldap.SearchRequest, conn net.Conn) (*Request, *sentry.Span) {
 	rid := uuid.New().String()
 	bindDN = strings.ToLower(bindDN)
-	span := sentry.StartSpan(context.TODO(), "authentik.providers.ldap.search", sentry.TransactionName("authentik.providers.ldap.search"))
+	span := sentry.StartSpan(context.TODO(), "authentik.providers.ldap.search", sentry.WithTransactionName("authentik.providers.ldap.search"))
 	span.Description = fmt.Sprintf("%s (%s)", searchReq.BaseDN, ldap.ScopeMap[searchReq.Scope])
 	span.SetTag("request_uid", rid)
 	hub := sentry.GetHubFromContext(span.Context())
@@ -40,13 +41,26 @@ func NewRequest(bindDN string, searchReq ldap.SearchRequest, conn net.Conn) (*Re
 	})
 	span.SetTag("ldap_filter", searchReq.Filter)
 	span.SetTag("ldap_base_dn", searchReq.BaseDN)
+	l := log.WithFields(log.Fields{
+		"bindDN":    bindDN,
+		"baseDN":    searchReq.BaseDN,
+		"requestId": rid,
+		"scope":     ldap.ScopeMap[searchReq.Scope],
+		"client":    utils.GetIP(conn.RemoteAddr()),
+		"filter":    searchReq.Filter,
+	})
+	filterOC, err := ldap.GetFilterObjectClass(searchReq.Filter)
+	if err != nil && len(searchReq.Filter) > 0 {
+		l.WithError(err).WithField("objectClass", filterOC).Warning("invalid filter object class")
+	}
 	return &Request{
-		SearchRequest: searchReq,
-		BindDN:        bindDN,
-		conn:          conn,
-		log:           log.WithField("bindDN", bindDN).WithField("requestId", rid).WithField("scope", ldap.ScopeMap[searchReq.Scope]).WithField("client", utils.GetIP(conn.RemoteAddr())).WithField("filter", searchReq.Filter).WithField("baseDN", searchReq.BaseDN),
-		id:            rid,
-		ctx:           span.Context(),
+		SearchRequest:     searchReq,
+		BindDN:            bindDN,
+		FilterObjectClass: filterOC,
+		conn:              conn,
+		log:               l,
+		id:                rid,
+		ctx:               span.Context(),
 	}, span
 }
 

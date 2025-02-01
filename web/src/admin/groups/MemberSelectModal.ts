@@ -1,14 +1,12 @@
 import { DEFAULT_CONFIG } from "@goauthentik/common/api/config";
-import { uiConfig } from "@goauthentik/common/ui/config";
-import { first } from "@goauthentik/common/utils";
-import { PFColor } from "@goauthentik/elements/Label";
+import { getRelativeTime } from "@goauthentik/common/utils";
+import "@goauthentik/components/ak-status-label";
 import "@goauthentik/elements/buttons/SpinnerButton";
 import { PaginatedResponse } from "@goauthentik/elements/table/Table";
 import { TableColumn } from "@goauthentik/elements/table/Table";
 import { TableModal } from "@goauthentik/elements/table/TableModal";
 
-import { t } from "@lingui/macro";
-
+import { msg } from "@lit/localize";
 import { TemplateResult, html } from "lit";
 import { customElement, property } from "lit/decorators.js";
 
@@ -28,20 +26,18 @@ export class MemberSelectTable extends TableModal<User> {
 
     order = "username";
 
-    async apiEndpoint(page: number): Promise<PaginatedResponse<User>> {
+    async apiEndpoint(): Promise<PaginatedResponse<User>> {
         return new CoreApi(DEFAULT_CONFIG).coreUsersList({
-            ordering: this.order,
-            page: page,
-            pageSize: (await uiConfig()).pagination.perPage,
-            search: this.search || "",
+            ...(await this.defaultEndpointConfig()),
+            includeGroups: false,
         });
     }
 
     columns(): TableColumn[] {
         return [
-            new TableColumn(t`Name`, "username"),
-            new TableColumn(t`Active`, "active"),
-            new TableColumn(t`Last login`, "last_login"),
+            new TableColumn(msg("Name"), "username"),
+            new TableColumn(msg("Active"), "is_active"),
+            new TableColumn(msg("Last login"), "last_login"),
         ];
     }
 
@@ -49,10 +45,11 @@ export class MemberSelectTable extends TableModal<User> {
         return [
             html`<div>${item.username}</div>
                 <small>${item.name}</small>`,
-            html` <ak-label color=${item.isActive ? PFColor.Green : PFColor.Orange}>
-                ${item.isActive ? t`Yes` : t`No`}
-            </ak-label>`,
-            html`${first(item.lastLogin?.toLocaleString(), t`-`)}`,
+            html` <ak-status-label type="warning" ?good=${item.isActive}></ak-status-label>`,
+            html`${item.lastLogin
+                ? html`<div>${getRelativeTime(item.lastLogin)}</div>
+                      <small>${item.lastLogin.toLocaleString()}</small>`
+                : msg("-")}`,
         ];
     }
 
@@ -63,7 +60,7 @@ export class MemberSelectTable extends TableModal<User> {
     renderModalInner(): TemplateResult {
         return html`<section class="pf-c-modal-box__header pf-c-page__main-section pf-m-light">
                 <div class="pf-c-content">
-                    <h1 class="pf-c-title pf-m-2xl">${t`Select users to add`}</h1>
+                    <h1 class="pf-c-title pf-m-2xl">${msg("Select users to add")}</h1>
                 </div>
             </section>
             <section class="pf-c-modal-box__body pf-m-light">${this.renderTable()}</section>
@@ -76,7 +73,7 @@ export class MemberSelectTable extends TableModal<User> {
                     }}
                     class="pf-m-primary"
                 >
-                    ${t`Add`} </ak-spinner-button
+                    ${msg("Add")} </ak-spinner-button
                 >&nbsp;
                 <ak-spinner-button
                     .callAction=${async () => {
@@ -84,8 +81,14 @@ export class MemberSelectTable extends TableModal<User> {
                     }}
                     class="pf-m-secondary"
                 >
-                    ${t`Cancel`}
+                    ${msg("Cancel")}
                 </ak-spinner-button>
             </footer>`;
+    }
+}
+
+declare global {
+    interface HTMLElementTagNameMap {
+        "ak-group-member-select-table": MemberSelectTable;
     }
 }

@@ -2,8 +2,7 @@ import { docLink } from "@goauthentik/common/global";
 import { ModalButton } from "@goauthentik/elements/buttons/ModalButton";
 import "@goauthentik/elements/buttons/TokenCopyButton";
 
-import { t } from "@lingui/macro";
-
+import { msg } from "@lit/localize";
 import { TemplateResult, html } from "lit";
 import { customElement, property } from "lit/decorators.js";
 import { ifDefined } from "lit/directives/if-defined.js";
@@ -17,14 +16,17 @@ export class OutpostDeploymentModal extends ModalButton {
 
     renderModalInner(): TemplateResult {
         return html`<div class="pf-c-modal-box__header">
-                <h1 class="pf-c-title pf-m-2xl">${t`Outpost Deployment Info`}</h1>
+                <h1 class="pf-c-title pf-m-2xl">${msg("Outpost Deployment Info")}</h1>
             </div>
             <div class="pf-c-modal-box__body">
                 <p>
                     <a
                         target="_blank"
-                        href="${docLink("/docs/outposts?utm_source=authentik#deploy")}"
-                        >${t`View deployment documentation`}</a
+                        href="${docLink(
+                            "/docs/add-secure-apps/outposts?utm_source=authentik#deploy",
+                        )}"
+                        rel="noopener noreferrer"
+                        >${msg("View deployment documentation")}</a
                     >
                 </p>
                 <form class="pf-c-form">
@@ -48,12 +50,14 @@ export class OutpostDeploymentModal extends ModalButton {
                                 class="pf-m-primary"
                                 identifier="${ifDefined(this.outpost?.tokenIdentifier)}"
                             >
-                                ${t`Click to copy token`}
+                                ${msg("Click to copy token")}
                             </ak-token-copy-button>
                         </div>
                     </div>
                     <h3>
-                        ${t`If your authentik Instance is using a self-signed certificate, set this value.`}
+                        ${msg(
+                            "If your authentik Instance is using a self-signed certificate, set this value.",
+                        )}
                     </h3>
                     <div class="pf-c-form__group">
                         <label class="pf-c-form__label">
@@ -64,7 +68,9 @@ export class OutpostDeploymentModal extends ModalButton {
                     ${this.outpost?.type == OutpostTypeEnum.Proxy
                         ? html`
                               <h3>
-                                  ${t`If your authentik_host setting does not match the URL you want to login with, add this setting.`}
+                                  ${msg(
+                                      "If your authentik_host setting does not match the URL you want to login with, add this setting.",
+                                  )}
                               </h3>
                               <div class="pf-c-form__group">
                                   <label class="pf-c-form__label">
@@ -90,8 +96,14 @@ export class OutpostDeploymentModal extends ModalButton {
                         this.open = false;
                     }}
                 >
-                    ${t`Close`}
+                    ${msg("Close")}
                 </button>
             </footer>`;
+    }
+}
+
+declare global {
+    interface HTMLElementTagNameMap {
+        "ak-outpost-deployment-modal": OutpostDeploymentModal;
     }
 }

@@ -6,57 +6,109 @@ updates:
       interval: daily
       time: "04:00"
     open-pull-requests-limit: 10
-    reviewers:
-      - "@goauthentik/core"
     commit-message:
       prefix: "ci:"
+    labels:
+      - dependencies
   - package-ecosystem: gomod
     directory: "/"
     schedule:
       interval: daily
       time: "04:00"
     open-pull-requests-limit: 10
-    reviewers:
-      - "@goauthentik/core"
     commit-message:
       prefix: "core:"
+    labels:
+      - dependencies
   - package-ecosystem: npm
-    directory: "/web"
+    directories:
+      - "/web"
+      - "/web/sfe"
     schedule:
       interval: daily
       time: "04:00"
+    labels:
+      - dependencies
     open-pull-requests-limit: 10
-    reviewers:
-      - "@goauthentik/core"
     commit-message:
       prefix: "web:"
+    groups:
+      sentry:
+        patterns:
+          - "@sentry/*"
+          - "@spotlightjs/*"
+      babel:
+        patterns:
+          - "@babel/*"
+          - "babel-*"
+      eslint:
+        patterns:
+          - "@eslint/*"
+          - "@typescript-eslint/*"
+          - "eslint-*"
+          - "eslint"
+          - "typescript-eslint"
+      storybook:
+        patterns:
+          - "@storybook/*"
+          - "*storybook*"
+      esbuild:
+        patterns:
+          - "@esbuild/*"
+          - "esbuild*"
+      rollup:
+        patterns:
+          - "@rollup/*"
+          - "rollup-*"
+          - "rollup*"
+      swc:
+        patterns:
+          - "@swc/*"
+          - "swc-*"
+      wdio:
+        patterns:
+          - "@wdio/*"
   - package-ecosystem: npm
     directory: "/website"
     schedule:
       interval: daily
       time: "04:00"
     open-pull-requests-limit: 10
-    reviewers:
-      - "@goauthentik/core"
     commit-message:
       prefix: "website:"
+    labels:
+      - dependencies
+    groups:
+      docusaurus:
+        patterns:
+          - "@docusaurus/*"
+  - package-ecosystem: npm
+    directory: "/lifecycle/aws"
+    schedule:
+      interval: daily
+      time: "04:00"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "lifecycle/aws:"
+    labels:
+      - dependencies
   - package-ecosystem: pip
     directory: "/"
     schedule:
       interval: daily
       time: "04:00"
     open-pull-requests-limit: 10
-    reviewers:
-      - "@goauthentik/core"
     commit-message:
       prefix: "core:"
+    labels:
+      - dependencies
   - package-ecosystem: docker
     directory: "/"
     schedule:
       interval: daily
       time: "04:00"
     open-pull-requests-limit: 10
-    reviewers:
-      - "@goauthentik/core"
     commit-message:
       prefix: "core:"
+    labels:
+      - dependencies

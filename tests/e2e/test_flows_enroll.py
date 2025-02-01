@@ -1,7 +1,7 @@
 """Test Enroll flow"""
+
 from time import sleep
 
-from django.test import override_settings
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as ec
 from selenium.webdriver.support.wait import WebDriverWait
@@ -9,6 +9,7 @@ from selenium.webdriver.support.wait import WebDriverWait
 from authentik.blueprints.tests import apply_blueprint
 from authentik.core.models import User
 from authentik.flows.models import Flow
+from authentik.lib.config import CONFIG
 from authentik.stages.identification.models import IdentificationStage
 from tests.e2e.utils import SeleniumTestCase, retry
 
@@ -36,12 +37,7 @@ class TestFlowsEnroll(SeleniumTestCase):
         self.driver.get(self.live_server_url)
 
         self.initial_stages()
-
-        interface_user = self.get_shadow_root("ak-interface-user")
-        wait = WebDriverWait(interface_user, self.wait_timeout)
-
-        wait.until(ec.presence_of_element_located((By.CSS_SELECTOR, ".pf-c-page__header")))
-        self.driver.get(self.if_user_url("/settings"))
+        sleep(2)
 
         user = User.objects.get(username="foo")
         self.assertEqual(user.username, "foo")
@@ -56,7 +52,7 @@ class TestFlowsEnroll(SeleniumTestCase):
     @apply_blueprint(
         "example/flows-enrollment-email-verification.yaml",
     )
-    @override_settings(EMAIL_PORT=1025)
+    @CONFIG.patch("email.port", 1025)
     def test_enroll_email(self):
         """Test enroll with Email verification"""
         # Attach enrollment flow to identification stage
@@ -90,11 +86,6 @@ class TestFlowsEnroll(SeleniumTestCase):
         self.driver.switch_to.window(self.driver.window_handles[0])
 
         sleep(2)
-        # We're now logged in
-        wait = WebDriverWait(self.get_shadow_root("ak-interface-user"), self.wait_timeout)
-
-        wait.until(ec.presence_of_element_located((By.CSS_SELECTOR, ".pf-c-page__header")))
-        self.driver.get(self.if_user_url("/settings"))
 
         self.assert_user(User.objects.get(username="foo"))
 
@@ -124,6 +115,7 @@ class TestFlowsEnroll(SeleniumTestCase):
         prompt_stage.find_element(By.CSS_SELECTOR, ".pf-c-button").click()
 
         # Second prompt stage
+        sleep(1)
         flow_executor = self.get_shadow_root("ak-flow-executor")
         prompt_stage = self.get_shadow_root("ak-stage-prompt", flow_executor)
         wait = WebDriverWait(prompt_stage, self.wait_timeout)

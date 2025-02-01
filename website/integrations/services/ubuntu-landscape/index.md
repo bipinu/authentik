@@ -1,16 +1,17 @@
 ---
-title: Ubuntu Landscape
+title: Integrate with Ubuntu Landscape
+sidebar_label: Ubuntu Landscape
 ---
+
+# Integrate with Ubuntu Landscape
 
 <span class="badge badge--secondary">Support level: Community</span>
 
 ## What is Ubuntu Landscape
 
-From https://en.wikipedia.org/wiki/Landscape_(software)
-
-:::note
-Landscape is a systems management tool developed by Canonical. It can be run on-premises or in the cloud depending on the needs of the user. It is primarily designed for use with Ubuntu derivatives such as Desktop, Server, and Core.
-:::
+> Landscape is a systems management tool developed by Canonical. It can be run on-premises or in the cloud depending on the needs of the user. It is primarily designed for use with Ubuntu derivatives such as Desktop, Server, and Core.
+>
+> -- https://en.wikipedia.org/wiki/Landscape_(software)
 
 :::caution
 This requires authentik 0.10.3 or newer.
@@ -18,10 +19,14 @@ This requires authentik 0.10.3 or newer.
 
 ## Preparation
 
-The following placeholders will be used:
+The following placeholders are used in this guide:
 
--   `landscape.company` is the FQDN of the Landscape server.
--   `authentik.company` is the FQDN of the authentik install.
+- `landscape.company` is the FQDN of the Landscape server.
+- `authentik.company` is the FQDN of the authentik installation.
+
+:::note
+This documentation lists only the settings that you need to change from their default values. Be aware that any changes other than those explicitly mentioned in this guide could cause issues accessing your application.
+:::
 
 Landscape uses the OpenID-Connect Protocol for single-sign on.
 

@@ -1,36 +1,43 @@
 ---
-title: Ansible Tower / AWX
+title: Integrate with Red Hat Ansible Automation Platform / AWX
+sidebar_label: Red Hat Ansible Automation Platform / AWX
 ---
+
+# Integrate with Red Hat Ansible Automation Platform / AWX
 
 <span class="badge badge--secondary"></span>
 
 ## What is Tower
 
-From https://docs.ansible.com/ansible/2.5/reference_appendices/tower.html
+From
+
+> Red Hat Ansible Automation Platform (RHAAP) (formerly ‘AWX’) is a web-based solution that makes Ansible even more easy to use for IT teams of all kinds. It’s designed to be the hub for all of your automation tasks.
+>
+> Tower allows you to control access to who can access what, even allowing sharing of SSH credentials without someone being able to transfer those credentials. Inventory can be graphically managed or synced with a wide variety of cloud sources. It logs all of your jobs, integrates well with LDAP, and has an amazing browsable REST API. Command line tools are available for easy integration with Jenkins as well. Provisioning callbacks provide great support for autoscaling topologies.
+>
+> -- https://docs.ansible.com/ansible/latest/reference_appendices/tower.html
 
 :::note
-Ansible Tower (formerly ‘AWX’) is a web-based solution that makes Ansible even more easy to use for IT teams of all kinds. It’s designed to be the hub for all of your automation tasks.
-
-Tower allows you to control access to who can access what, even allowing sharing of SSH credentials without someone being able to transfer those credentials. Inventory can be graphically managed or synced with a wide variety of cloud sources. It logs all of your jobs, integrates well with LDAP, and has an amazing browsable REST API. Command line tools are available for easy integration with Jenkins as well. Provisioning callbacks provide great support for autoscaling topologies.
-:::
-
-:::note
-AWX is the open-source version of Tower. The term "AWX" will be used interchangeably throughout this document.
+AWX is the open-source version of RHAAP. The term "AWX" will be used interchangeably throughout this document.
 :::
 
 ## Preparation
 
-The following placeholders will be used:
+The following placeholders are used in this guide:
 
--   `awx.company` is the FQDN of the AWX/Tower install.
--   `authentik.company` is the FQDN of the authentik install.
+- `awx.company` is the FQDN of the AWX/RHAAP installation.
+- `authentik.company` is the FQDN of the authentik installation.
+
+:::note
+This documentation lists only the settings that you need to change from their default values. Be aware that any changes other than those explicitly mentioned in this guide could cause issues accessing your application.
+:::
 
 Create an application in authentik and note the slug, as this will be used later. Create a SAML provider with the following parameters:
 
--   ACS URL: `https://awx.company/sso/complete/saml/`
--   Audience: `awx`
--   Service Provider Binding: Post
--   Issuer: `https://awx.company/sso/metadata/saml/`
+- ACS URL: `https://awx.company/sso/complete/saml/`
+- Audience: `awx`
+- Service Provider Binding: Post
+- Issuer: `https://awx.company/sso/metadata/saml/`
 
 You can of course use a custom signing certificate, and adjust durations.
 

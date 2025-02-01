@@ -1,15 +1,17 @@
 ---
-title: Writefreely
+title: Integrate with Writefreely
+sidebar_label: Writefreely
 ---
+
+# Integrate with Writefreely
 
 <span class="badge badge--secondary">Support level: Community</span>
 
 ## What is Writefreely
 
-From https://writefreely.org/
-:::note
-An open source platform for building a writing space on the web.
-:::
+> An open source platform for building a writing space on the web.
+>
+> -- https://writefreely.org/
 
 :::caution
 Currently it is not possible to connect writefreely to authentik without making an adjustment in the database. See [here](https://github.com/writefreely/writefreely/issues/516) and [Writefreely Setup](https://goauthentik.io/integrations/services/writefreely/#writefreely-setup)
@@ -17,10 +19,14 @@ Currently it is not possible to connect writefreely to authentik without making 
 
 ## Preparation
 
-The following placeholders will be used:
+The following placeholders are used in this guide:
 
--   `writefreely.company` is the FQDN of the writefreely install.
--   `authentik.company` is the FQDN of the authentik install.
+- `writefreely.company` is the FQDN of the Writefreely installation.
+- `authentik.company` is the FQDN of the authentik installation.
+
+:::note
+This documentation lists only the settings that you need to change from their default values. Be aware that any changes other than those explicitly mentioned in this guide could cause issues accessing your application.
+:::
 
 ## authentik Configuration
 
@@ -28,16 +34,16 @@ The following placeholders will be used:
 
 Create a OAuth2/OpenID Provider (under _Applications/Providers_) with these settings:
 
--   Name : writefreely
--   Redirect URI: `https://writefreely.company/oauth/callback/generic`
+- Name: writefreely
+- Redirect URI: `https://writefreely.company/oauth/callback/generic`
 
 ### Step 3 - Application
 
 Create an application (under _Resources/Applications_) with these settings:
 
--   Name: Writefreely
--   Slug: writefreely
--   Provider: writefreely
+- Name: Writefreely
+- Slug: writefreely
+- Provider: writefreely
 
 ## Writefreely Setup
 
@@ -88,6 +94,12 @@ map_email          = email
 
 Restart writefreely.service
 
+## Account linking
+
+If your usernames in authentik and WriteFreely are different, you might need to link your accounts before being able to use SSO.
+
+To link the accounts, first log into Writefreely with local credentials, and then navigate to **Customize -->Account Settings**. In the option "Linked Accounts", click on "authentik".
+
 ## Additional Resources
 
--   https://writefreely.org/docs/latest/admin/config
+- https://writefreely.org/docs/latest/admin/config

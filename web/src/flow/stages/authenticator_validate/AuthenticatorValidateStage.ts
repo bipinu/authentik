@@ -2,14 +2,12 @@ import { DEFAULT_CONFIG } from "@goauthentik/common/api/config";
 import "@goauthentik/flow/stages/authenticator_validate/AuthenticatorValidateStageCode";
 import "@goauthentik/flow/stages/authenticator_validate/AuthenticatorValidateStageDuo";
 import "@goauthentik/flow/stages/authenticator_validate/AuthenticatorValidateStageWebAuthn";
-import { BaseStage, StageHost } from "@goauthentik/flow/stages/base";
+import { BaseStage, StageHost, SubmitOptions } from "@goauthentik/flow/stages/base";
 import { PasswordManagerPrefill } from "@goauthentik/flow/stages/identification/IdentificationStage";
 
-import { t } from "@lingui/macro";
-
-import { CSSResult, TemplateResult, css, html } from "lit";
+import { msg } from "@lit/localize";
+import { CSSResult, PropertyValues, TemplateResult, css, html, nothing } from "lit";
 import { customElement, state } from "lit/decorators.js";
-import { ifDefined } from "lit/directives/if-defined.js";
 
 import PFButton from "@patternfly/patternfly/components/Button/button.css";
 import PFForm from "@patternfly/patternfly/components/Form/form.css";
@@ -21,11 +19,42 @@ import PFBase from "@patternfly/patternfly/patternfly-base.css";
 import {
     AuthenticatorValidationChallenge,
     AuthenticatorValidationChallengeResponseRequest,
-    CurrentTenant,
+    CurrentBrand,
     DeviceChallenge,
     DeviceClassesEnum,
     FlowsApi,
 } from "@goauthentik/api";
+
+const customCSS = css`
+    ul {
+        padding-top: 1rem;
+    }
+    ul > li:not(:last-child) {
+        padding-bottom: 1rem;
+    }
+    .authenticator-button {
+        display: flex;
+        align-items: center;
+    }
+    :host([theme="dark"]) .authenticator-button {
+        color: var(--ak-dark-foreground) !important;
+    }
+    i {
+        font-size: 1.5rem;
+        padding: 1rem 0;
+        width: 3rem;
+    }
+    .right {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        height: 100%;
+        text-align: left;
+    }
+    .right > * {
+        height: 50%;
+    }
+`;
 
 @customElement("ak-stage-authenticator-validate")
 export class AuthenticatorValidateStage
@@ -35,6 +64,10 @@ export class AuthenticatorValidateStage
     >
     implements StageHost
 {
+    static get styles(): CSSResult[] {
+        return [PFBase, PFLogin, PFForm, PFFormControl, PFTitle, PFButton, customCSS];
+    }
+
     flowSlug = "";
 
     set loading(value: boolean) {
@@ -45,21 +78,26 @@ export class AuthenticatorValidateStage
         return this.host.loading;
     }
 
-    get tenant(): CurrentTenant | undefined {
-        return this.host.tenant;
+    get brand(): CurrentBrand | undefined {
+        return this.host.brand;
     }
+
+    @state()
+    _firstInitialized: boolean = false;
 
     @state()
     _selectedDeviceChallenge?: DeviceChallenge;
 
     set selectedDeviceChallenge(value: DeviceChallenge | undefined) {
+        const previousChallenge = this._selectedDeviceChallenge;
         this._selectedDeviceChallenge = value;
-        if (!value) return;
-        if (value === this._selectedDeviceChallenge) return;
+        if (value === undefined || value === previousChallenge) {
+            return;
+        }
         // We don't use this.submit here, as we don't want to advance the flow.
         // We just want to notify the backend which challenge has been selected.
         new FlowsApi(DEFAULT_CONFIG).flowsExecutorSolve({
-            flowSlug: this.host.flowSlug || "",
+            flowSlug: this.host?.flowSlug || "",
             query: window.location.search.substring(1),
             flowChallengeResponseRequest: {
                 // @ts-ignore
@@ -73,76 +111,84 @@ export class AuthenticatorValidateStage
         return this._selectedDeviceChallenge;
     }
 
-    submit(payload: AuthenticatorValidationChallengeResponseRequest): Promise<boolean> {
-        return this.host?.submit(payload) || Promise.resolve();
+    submit(
+        payload: AuthenticatorValidationChallengeResponseRequest,
+        options?: SubmitOptions,
+    ): Promise<boolean> {
+        return this.host?.submit(payload, options) || Promise.resolve();
     }
 
-    static get styles(): CSSResult[] {
-        return [PFBase, PFLogin, PFForm, PFFormControl, PFTitle, PFButton].concat(css`
-            ul {
-                padding-top: 1rem;
-            }
-            ul > li:not(:last-child) {
-                padding-bottom: 1rem;
-            }
-            .authenticator-button {
-                display: flex;
-                align-items: center;
-            }
-            i {
-                font-size: 1.5rem;
-                padding: 1rem 0;
-                width: 3rem;
-            }
-            .right {
-                display: flex;
-                flex-direction: column;
-                justify-content: space-between;
-                height: 100%;
-                text-align: left;
-            }
-            .right > * {
-                height: 50%;
-            }
-        `);
+    willUpdate(_changed: PropertyValues<this>) {
+        if (this._firstInitialized || !this.challenge) {
+            return;
+        }
+
+        this._firstInitialized = true;
+
+        // If user only has a single device, autoselect that device.
+        if (this.challenge.deviceChallenges.length === 1) {
+            this.selectedDeviceChallenge = this.challenge.deviceChallenges[0];
+            return;
+        }
+
+        // If TOTP is allowed from the backend and we have a pre-filled value
+        // from the password manager, autoselect TOTP.
+        const totpChallenge = this.challenge.deviceChallenges.find(
+            (challenge) => challenge.deviceClass === DeviceClassesEnum.Totp,
+        );
+        if (PasswordManagerPrefill.totp && totpChallenge) {
+            console.debug(
+                "authentik/stages/authenticator_validate: found prefill totp code, selecting totp challenge",
+            );
+            this.selectedDeviceChallenge = totpChallenge;
+            return;
+        }
+
+        // If the last used device is not Static, autoselect that device.
+        const lastUsedChallenge = this.challenge.deviceChallenges
+            .filter((deviceChallenge) => deviceChallenge.lastUsed)
+            .sort((a, b) => b.lastUsed!.valueOf() - a.lastUsed!.valueOf())[0];
+        if (lastUsedChallenge && lastUsedChallenge.deviceClass !== DeviceClassesEnum.Static) {
+            this.selectedDeviceChallenge = lastUsedChallenge;
+        }
     }
 
-    renderDevicePickerSingle(deviceChallenge: DeviceChallenge): TemplateResult {
+    renderDevicePickerSingle(deviceChallenge: DeviceChallenge) {
         switch (deviceChallenge.deviceClass) {
             case DeviceClassesEnum.Duo:
                 return html`<i class="fas fa-mobile-alt"></i>
                     <div class="right">
-                        <p>${t`Duo push-notifications`}</p>
-                        <small>${t`Receive a push notification on your device.`}</small>
+                        <p>${msg("Duo push-notifications")}</p>
+                        <small>${msg("Receive a push notification on your device.")}</small>
                     </div>`;
             case DeviceClassesEnum.Webauthn:
                 return html`<i class="fas fa-mobile-alt"></i>
                     <div class="right">
-                        <p>${t`Authenticator`}</p>
-                        <small>${t`Use a security key to prove your identity.`}</small>
+                        <p>${msg("Authenticator")}</p>
+                        <small>${msg("Use a security key to prove your identity.")}</small>
                     </div>`;
             case DeviceClassesEnum.Totp:
                 return html`<i class="fas fa-clock"></i>
                     <div class="right">
-                        <p>${t`Traditional authenticator`}</p>
-                        <small>${t`Use a code-based authenticator.`}</small>
+                        <p>${msg("Traditional authenticator")}</p>
+                        <small>${msg("Use a code-based authenticator.")}</small>
                     </div>`;
             case DeviceClassesEnum.Static:
                 return html`<i class="fas fa-key"></i>
                     <div class="right">
-                        <p>${t`Recovery keys`}</p>
-                        <small>${t`In case you can't access any other method.`}</small>
+                        <p>${msg("Recovery keys")}</p>
+                        <small>${msg("In case you can't access any other method.")}</small>
                     </div>`;
             case DeviceClassesEnum.Sms:
-                return html`<i class="fas fa-mobile"></i>
+                return html`<i class="fas fa-mobile-alt"></i>
                     <div class="right">
-                        <p>${t`SMS`}</p>
-                        <small>${t`Tokens sent via SMS.`}</small>
+                        <p>${msg("SMS")}</p>
+                        <small>${msg("Tokens sent via SMS.")}</small>
                     </div>`;
             default:
                 break;
         }
-        return html``;
+        return nothing;
     }
 
     renderDevicePicker(): TemplateResult {
@@ -187,9 +233,9 @@ export class AuthenticatorValidateStage
         </ul>`;
     }
 
-    renderDeviceChallenge(): TemplateResult {
+    renderDeviceChallenge() {
         if (!this.selectedDeviceChallenge) {
-            return html``;
+            return nothing;
         }
         switch (this.selectedDeviceChallenge?.deviceClass) {
             case DeviceClassesEnum.Static:
@@ -219,64 +265,37 @@ export class AuthenticatorValidateStage
                 >
                 </ak-stage-authenticator-validate-duo>`;
         }
-        return html``;
+        return nothing;
     }
 
     render(): TemplateResult {
-        if (!this.challenge) {
-            return html`<ak-empty-state ?loading="${true}" header=${t`Loading`}> </ak-empty-state>`;
-        }
-        // User only has a single device class, so we don't show a picker
-        if (this.challenge?.deviceChallenges.length === 1) {
-            this.selectedDeviceChallenge = this.challenge.deviceChallenges[0];
-        }
-        // TOTP is a bit special, assuming that TOTP is allowed from the backend,
-        // and we have a pre-filled value from the password manager,
-        // directly set the the TOTP device Challenge as active.
-        const totpChallenge = this.challenge.deviceChallenges.find(
-            (challenge) => challenge.deviceClass === DeviceClassesEnum.Totp,
-        );
-        if (PasswordManagerPrefill.totp && totpChallenge) {
-            console.debug(
-                "authentik/stages/authenticator_validate: found prefill totp code, selecting totp challenge",
-            );
-            this.selectedDeviceChallenge = totpChallenge;
-        }
-        return html`<header class="pf-c-login__main-header">
-                <h1 class="pf-c-title pf-m-3xl">${this.challenge.flowInfo?.title}</h1>
-            </header>
-            ${this.selectedDeviceChallenge
-                ? this.renderDeviceChallenge()
-                : html`<div class="pf-c-login__main-body">
-                          <form class="pf-c-form">
-                              <ak-form-static
-                                  class="pf-c-form__group"
-                                  userAvatar="${this.challenge.pendingUserAvatar}"
-                                  user=${this.challenge.pendingUser}
-                              >
-                                  <div slot="link">
-                                      <a href="${ifDefined(this.challenge.flowInfo?.cancelUrl)}"
-                                          >${t`Not you?`}</a
-                                      >
-                                  </div>
-                              </ak-form-static>
-                              <input
-                                  name="username"
-                                  autocomplete="username"
-                                  type="hidden"
-                                  value="${this.challenge.pendingUser}"
-                              />
-                              ${this.selectedDeviceChallenge
-                                  ? ""
-                                  : html`<p>${t`Select an authentication method.`}</p>`}
-                              ${this.challenge.configurationStages.length > 0
-                                  ? this.renderStagePicker()
-                                  : html``}
-                          </form>
-                          ${this.renderDevicePicker()}
-                      </div>
-                      <footer class="pf-c-login__main-footer">
-                          <ul class="pf-c-login__main-footer-links"></ul>
-                      </footer>`}`;
+        return this.challenge
+            ? html`<header class="pf-c-login__main-header">
+                      <h1 class="pf-c-title pf-m-3xl">${this.challenge.flowInfo?.title}</h1>
+                  </header>
+                  ${this.selectedDeviceChallenge
+                      ? this.renderDeviceChallenge()
+                      : html`<div class="pf-c-login__main-body">
+                                <form class="pf-c-form">
+                                    ${this.renderUserInfo()}
+                                    ${this.selectedDeviceChallenge
+                                        ? ""
+                                        : html`<p>${msg("Select an authentication method.")}</p>`}
+                                    ${this.challenge.configurationStages.length > 0
+                                        ? this.renderStagePicker()
+                                        : html``}
+                                </form>
+                                ${this.renderDevicePicker()}
+                            </div>
+                            <footer class="pf-c-login__main-footer">
+                                <ul class="pf-c-login__main-footer-links"></ul>
+                            </footer>`}`
+            : html`<ak-empty-state loading> </ak-empty-state>`;
+    }
+}
+
+declare global {
+    interface HTMLElementTagNameMap {
+        "ak-stage-authenticator-validate": AuthenticatorValidateStage;
     }
 }
