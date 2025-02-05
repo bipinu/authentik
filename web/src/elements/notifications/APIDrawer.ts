@@ -1,9 +1,10 @@
 import { RequestInfo } from "@goauthentik/common/api/middleware";
 import { EVENT_API_DRAWER_TOGGLE, EVENT_REQUEST_POST } from "@goauthentik/common/constants";
+import { globalAK } from "@goauthentik/common/global";
+import { getRelativeTime } from "@goauthentik/common/utils";
 import { AKElement } from "@goauthentik/elements/Base";
 
-import { t } from "@lingui/macro";
-
+import { msg } from "@lit/localize";
 import { CSSResult, TemplateResult, css, html } from "lit";
 import { customElement, property } from "lit/decorators.js";
 
@@ -26,8 +27,11 @@ export class APIDrawer extends AKElement {
             PFContent,
             PFDropdown,
             css`
+                :host {
+                    --header-height: 114px;
+                }
                 .pf-c-notification-drawer__header {
-                    height: 114px;
+                    height: var(--header-height);
                     align-items: center;
                 }
                 .pf-c-notification-drawer__header-action,
@@ -39,6 +43,12 @@ export class APIDrawer extends AKElement {
                     white-space: pre-wrap;
                     font-family: monospace;
                 }
+                .pf-c-notification-drawer__body {
+                    overflow-x: hidden;
+                }
+                .pf-c-notification-drawer__list {
+                    max-height: calc(100vh - var(--header-height));
+                }
             `,
         ];
     }
@@ -46,7 +56,8 @@ export class APIDrawer extends AKElement {
     constructor() {
         super();
         window.addEventListener(EVENT_REQUEST_POST, ((e: CustomEvent<RequestInfo>) => {
-            this.requests.splice(0, 0, e.detail);
+            this.requests.push(e.detail);
+            this.requests.sort((a, b) => a.time - b.time).reverse();
             if (this.requests.length > 50) {
                 this.requests.shift();
             }
@@ -67,6 +78,9 @@ export class APIDrawer extends AKElement {
                 href=${item.path}
                 >${item.path}</a
             >
+            <div class="pf-c-notification-drawer__list-item-timestamp">
+                ${getRelativeTime(new Date(item.time))}
+            </div>
         </li>`;
     }
 
@@ -75,8 +89,12 @@ export class APIDrawer extends AKElement {
             <div class="pf-c-notification-drawer">
                 <div class="pf-c-notification-drawer__header">
                     <div class="text">
-                        <h1 class="pf-c-notification-drawer__header-title">${t`API Requests`}</h1>
-                        <a href="/api/v3/" target="_blank">${t`Open API Browser`}</a>
+                        <h1 class="pf-c-notification-drawer__header-title">
+                            ${msg("API Requests")}
+                        </h1>
+                        <a href="${globalAK().api.base}api/v3/" target="_blank"
+                            >${msg("Open API Browser")}</a
+                        >
                     </div>
                     <div class="pf-c-notification-drawer__header-action">
                         <div class="pf-c-notification-drawer__header-action-close">
@@ -91,7 +109,7 @@ export class APIDrawer extends AKElement {
                                 }}
                                 class="pf-c-button pf-m-plain"
                                 type="button"
-                                aria-label="Close"
+                                aria-label=${msg("Close")}
                             >
                                 <i class="fas fa-times" aria-hidden="true"></i>
                             </button>
@@ -105,5 +123,11 @@ export class APIDrawer extends AKElement {
                 </div>
             </div>
         </div>`;
+    }
+}
+
+declare global {
+    interface HTMLElementTagNameMap {
+        "ak-api-drawer": APIDrawer;
     }
 }

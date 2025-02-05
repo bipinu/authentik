@@ -1,8 +1,7 @@
 import "@goauthentik/elements/EmptyState";
 import { BaseStage } from "@goauthentik/flow/stages/base";
 
-import { t } from "@lingui/macro";
-
+import { msg } from "@lit/localize";
 import { CSSResult, TemplateResult, html } from "lit";
 import { customElement, property } from "lit/decorators.js";
 
@@ -41,11 +40,11 @@ export class AppleLoginInit extends BaseStage<AppleLoginChallenge, AppleChalleng
             this.isModalShown = true;
         };
         document.head.append(appleAuth);
-        //Listen for authorization success
+        // Listen for authorization success
         document.addEventListener("AppleIDSignInOnSuccess", () => {
             //handle successful response
         });
-        //Listen for authorization failures
+        // Listen for authorization failures
         document.addEventListener("AppleIDSignInOnFailure", (error) => {
             console.warn(error);
             this.isModalShown = false;
@@ -54,11 +53,11 @@ export class AppleLoginInit extends BaseStage<AppleLoginChallenge, AppleChalleng
 
     render(): TemplateResult {
         return html`<header class="pf-c-login__main-header">
-                <h1 class="pf-c-title pf-m-3xl">${t`Authenticating with Apple...`}</h1>
+                <h1 class="pf-c-title pf-m-3xl">${msg("Authenticating with Apple...")}</h1>
             </header>
             <div class="pf-c-login__main-body">
                 <form class="pf-c-form">
-                    <ak-empty-state ?loading="${true}"> </ak-empty-state>
+                    <ak-empty-state loading></ak-empty-state>
                     ${!this.isModalShown
                         ? html`<button
                               class="pf-c-button pf-m-primary pf-m-block"
@@ -66,7 +65,7 @@ export class AppleLoginInit extends BaseStage<AppleLoginChallenge, AppleChalleng
                                   AppleID.auth.signIn();
                               }}
                           >
-                              ${t`Retry`}
+                              ${msg("Retry")}
                           </button>`
                         : html``}
                 </form>
@@ -74,5 +73,11 @@ export class AppleLoginInit extends BaseStage<AppleLoginChallenge, AppleChalleng
             <footer class="pf-c-login__main-footer">
                 <ul class="pf-c-login__main-footer-links"></ul>
             </footer>`;
+    }
+}
+
+declare global {
+    interface HTMLElementTagNameMap {
+        "ak-flow-source-oauth-apple": AppleLoginInit;
     }
 }

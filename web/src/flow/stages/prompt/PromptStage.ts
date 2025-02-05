@@ -1,13 +1,15 @@
-import { LOCALES } from "@goauthentik/common/ui/locale";
-import { rootInterface } from "@goauthentik/elements/Base";
 import "@goauthentik/elements/Divider";
 import "@goauthentik/elements/EmptyState";
+import {
+    CapabilitiesEnum,
+    WithCapabilitiesConfig,
+} from "@goauthentik/elements/Interface/capabilitiesProvider";
+import { LOCALES } from "@goauthentik/elements/ak-locale-context/definitions";
 import "@goauthentik/elements/forms/FormElement";
 import { BaseStage } from "@goauthentik/flow/stages/base";
 
-import { t } from "@lingui/macro";
-
-import { CSSResult, TemplateResult, css, html } from "lit";
+import { msg } from "@lit/localize";
+import { CSSResult, TemplateResult, css, html, nothing } from "lit";
 import { customElement } from "lit/decorators.js";
 import { unsafeHTML } from "lit/directives/unsafe-html.js";
 
@@ -21,7 +23,6 @@ import PFTitle from "@patternfly/patternfly/components/Title/title.css";
 import PFBase from "@patternfly/patternfly/patternfly-base.css";
 
 import {
-    CapabilitiesEnum,
     PromptChallenge,
     PromptChallengeResponseRequest,
     PromptTypeEnum,
@@ -29,7 +30,9 @@ import {
 } from "@goauthentik/api";
 
 @customElement("ak-stage-prompt")
-export class PromptStage extends BaseStage<PromptChallenge, PromptChallengeResponseRequest> {
+export class PromptStage extends WithCapabilitiesConfig(
+    BaseStage<PromptChallenge, PromptChallengeResponseRequest>,
+) {
     static get styles(): CSSResult[] {
         return [
             PFBase,
@@ -64,14 +67,14 @@ export class PromptStage extends BaseStage<PromptChallenge, PromptChallengeRespo
                 />`;
             case PromptTypeEnum.TextArea:
                 return html`<textarea
-                    type="text"
                     name="${prompt.fieldKey}"
                     placeholder="${prompt.placeholder}"
                     autocomplete="off"
                     class="pf-c-form-control"
                     ?required=${prompt.required}
-                    value="${prompt.initialValue}"
-                ></textarea>`;
+                >
+${prompt.initialValue}</textarea
+                >`;
             case PromptTypeEnum.TextReadOnly:
                 return html`<input
                     type="text"
@@ -83,13 +86,13 @@ export class PromptStage extends BaseStage<PromptChallenge, PromptChallengeRespo
                 />`;
             case PromptTypeEnum.TextAreaReadOnly:
                 return html`<textarea
-                    type="text"
                     name="${prompt.fieldKey}"
                     placeholder="${prompt.placeholder}"
                     class="pf-c-form-control"
                     readonly
-                    value="${prompt.initialValue}"
-                ></textarea>`;
+                >
+${prompt.initialValue}</textarea
+                >`;
             case PromptTypeEnum.Username:
                 return html`<input
                     type="text"
@@ -186,57 +189,53 @@ export class PromptStage extends BaseStage<PromptChallenge, PromptChallengeRespo
                             class="pf-c-check__input"
                             name="${prompt.fieldKey}"
                             id="${id}"
-                            checked="${prompt.initialValue === choice}"
-                            required="${prompt.required}"
+                            ?checked="${prompt.initialValue === choice}"
+                            ?required="${prompt.required}"
                             value="${choice}"
                         />
                         <label class="pf-c-check__label" for=${id}>${choice}</label>
                     </div> `;
                 })}`;
-            case PromptTypeEnum.AkLocale:
-                return html`<select class="pf-c-form-control" name="${prompt.fieldKey}">
-                    <option value="" ${prompt.initialValue === "" ? "selected" : ""}>
-                        ${t`Auto-detect (based on your browser)`}
-                    </option>
-                    ${LOCALES.filter((locale) => {
-                        // Only show debug locale if debug mode is enabled
-                        if (locale.code === "debug") {
-                            return rootInterface()?.config?.capabilities.includes(
-                                CapabilitiesEnum.CanDebug,
-                            );
-                        }
-                        return true;
-                    }).map((locale) => {
-                        return html`<option
+            case PromptTypeEnum.AkLocale: {
+                const locales = this.can(CapabilitiesEnum.CanDebug)
+                    ? LOCALES
+                    : LOCALES.filter((locale) => locale.code !== "debug");
+                const options = locales.map(
+                    (locale) =>
+                        html`<option
                             value=${locale.code}
-                            ${prompt.initialValue === locale.code ? "selected" : ""}
+                            ?selected=${locale.code === prompt.initialValue}
                         >
-                            ${locale.code.toUpperCase()} - ${locale.label}
-                        </option>`;
-                    })}
+                            ${locale.code.toUpperCase()} - ${locale.label()}
+                        </option> `,
+                );
+
+                return html`<select class="pf-c-form-control" name="${prompt.fieldKey}">
+                    <option value="" ?selected=${prompt.initialValue === ""}>
+                        ${msg("Auto-detect (based on your browser)")}
+                    </option>
+                    ${options}
                 </select>`;
+            }
             default:
                 return html`<p>invalid type '${prompt.type}'</p>`;
         }
     }
 
-    renderPromptHelpText(prompt: StagePrompt): TemplateResult {
+    renderPromptHelpText(prompt: StagePrompt) {
         if (prompt.subText === "") {
-            return html``;
+            return nothing;
         }
         return html`<p class="pf-c-form__helper-text">${unsafeHTML(prompt.subText)}</p>`;
     }
 
     shouldRenderInWrapper(prompt: StagePrompt): boolean {
         // Special types that aren't rendered in a wrapper
-        if (
+        return !(
             prompt.type === PromptTypeEnum.Static ||
             prompt.type === PromptTypeEnum.Hidden ||
             prompt.type === PromptTypeEnum.Separator
-        ) {
-            return false;
-        }
-        return true;
+        );
     }
 
     renderField(prompt: StagePrompt): TemplateResult {
@@ -253,8 +252,8 @@ export class PromptStage extends BaseStage<PromptChallenge, PromptChallengeRespo
                 />
                 <label class="pf-c-check__label" for="${prompt.fieldKey}">${prompt.label}</label>
                 ${prompt.required
-                    ? html`<p class="pf-c-form__helper-text">${t`Required.`}</p>`
-                    : html``}
+                    ? html`<p class="pf-c-form__helper-text">${msg("Required.")}</p>`
+                    : nothing}
                 <p class="pf-c-form__helper-text">${unsafeHTML(prompt.subText)}</p>
             </div>`;
         }
@@ -274,14 +273,14 @@ export class PromptStage extends BaseStage<PromptChallenge, PromptChallengeRespo
     renderContinue(): TemplateResult {
         return html` <div class="pf-c-form__group pf-m-action">
             <button type="submit" class="pf-c-button pf-m-primary pf-m-block">
-                ${t`Continue`}
+                ${msg("Continue")}
             </button>
         </div>`;
     }
 
     render(): TemplateResult {
         if (!this.challenge) {
-            return html`<ak-empty-state ?loading="${true}" header=${t`Loading`}> </ak-empty-state>`;
+            return html`<ak-empty-state loading> </ak-empty-state>`;
         }
         return html`<header class="pf-c-login__main-header">
                 <h1 class="pf-c-title pf-m-3xl">${this.challenge.flowInfo?.title}</h1>
@@ -296,16 +295,17 @@ export class PromptStage extends BaseStage<PromptChallenge, PromptChallengeRespo
                     ${this.challenge.fields.map((prompt) => {
                         return this.renderField(prompt);
                     })}
-                    ${"non_field_errors" in (this.challenge?.responseErrors || {})
-                        ? this.renderNonFieldErrors(
-                              this.challenge?.responseErrors?.non_field_errors || [],
-                          )
-                        : html``}
-                    ${this.renderContinue()}
+                    ${this.renderNonFieldErrors()} ${this.renderContinue()}
                 </form>
             </div>
             <footer class="pf-c-login__main-footer">
                 <ul class="pf-c-login__main-footer-links"></ul>
             </footer>`;
+    }
+}
+
+declare global {
+    interface HTMLElementTagNameMap {
+        "ak-stage-prompt": PromptStage;
     }
 }

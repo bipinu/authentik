@@ -8,17 +8,17 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 
+	"beryju.io/ldap"
 	"github.com/getsentry/sentry-go"
-	"github.com/nmcclain/ldap"
 	"github.com/prometheus/client_golang/prometheus"
 	"goauthentik.io/api/v3"
+	"goauthentik.io/internal/outpost/ak"
 	"goauthentik.io/internal/outpost/ldap/constants"
 	"goauthentik.io/internal/outpost/ldap/group"
 	"goauthentik.io/internal/outpost/ldap/metrics"
 	"goauthentik.io/internal/outpost/ldap/search"
 	"goauthentik.io/internal/outpost/ldap/server"
 	"goauthentik.io/internal/outpost/ldap/utils"
-	"goauthentik.io/internal/outpost/ldap/utils/paginator"
 )
 
 type DirectSearcher struct {
@@ -31,7 +31,6 @@ func NewDirectSearcher(si server.LDAPServerInstance) *DirectSearcher {
 		si:  si,
 		log: log.WithField("logger", "authentik.outpost.ldap.searcher.direct"),
 	}
-	ds.log.Info("initialised direct searcher")
 	return ds
 }
 
@@ -39,16 +38,6 @@ func (ds *DirectSearcher) Search(req *search.Request) (ldap.ServerSearchResult, 
 	accsp := sentry.StartSpan(req.Context(), "authentik.providers.ldap.search.check_access")
 	baseDN := ds.si.GetBaseDN()
 
-	filterOC, err := ldap.GetFilterObjectClass(req.Filter)
-	if err != nil {
-		metrics.RequestsRejected.With(prometheus.Labels{
-			"outpost_name": ds.si.GetOutpostName(),
-			"type":         "search",
-			"reason":       "filter_parse_fail",
-			"app":          ds.si.GetAppSlug(),
-		}).Inc()
-		return ldap.ServerSearchResult{ResultCode: ldap.LDAPResultOperationsError}, fmt.Errorf("Search Error: error parsing filter: %s", req.Filter)
-	}
 	if len(req.BindDN) < 1 {
 		metrics.RequestsRejected.With(prometheus.Labels{
 			"outpost_name": ds.si.GetOutpostName(),
@@ -98,12 +87,18 @@ func (ds *DirectSearcher) Search(req *search.Request) (ldap.ServerSearchResult, 
 	c := api.NewAPIClient(ds.si.GetAPIClient().GetConfig())
 	c.GetConfig().AddDefaultHeader("X-authentik-outpost-ldap-query", req.Filter)
 
-	scope := req.SearchRequest.Scope
-	needUsers, needGroups := ds.si.GetNeededObjects(scope, req.BaseDN, filterOC)
+	scope := req.Scope
+	needUsers, needGroups := ds.si.GetNeededObjects(scope, req.BaseDN, req.FilterObjectClass)
 
 	if scope >= 0 && strings.EqualFold(req.BaseDN, baseDN) {
-		if utils.IncludeObjectClass(filterOC, constants.GetDomainOCs()) {
-			entries = append(entries, ds.si.GetBaseEntry())
+		if utils.IncludeObjectClass(req.FilterObjectClass, constants.GetDomainOCs()) {
+			rootEntries, _ := ds.SearchBase(req)
+			// Since `SearchBase` returns entries for the root DN, we need to go through the
+			// entries and update the base DN
+			for _, e := range rootEntries.Entries {
+				e.DN = ds.si.GetBaseDN()
+				entries = append(entries, e)
+			}
 		}
 
 		scope -= 1 // Bring it from WholeSubtree to SingleLevel and so on
@@ -118,16 +113,21 @@ func (ds *DirectSearcher) Search(req *search.Request) (ldap.ServerSearchResult, 
 		errs.Go(func() error {
 			if flags.CanSearch {
 				uapisp := sentry.StartSpan(errCtx, "authentik.providers.ldap.search.api_user")
-				searchReq, skip := utils.ParseFilterForUser(c.CoreApi.CoreUsersList(uapisp.Context()), parsedFilter, false)
+				searchReq, skip := utils.ParseFilterForUser(c.CoreApi.CoreUsersList(uapisp.Context()).IncludeGroups(true), parsedFilter, false)
 
 				if skip {
 					req.Log().Trace("Skip backend request")
 					return nil
 				}
 
-				u := paginator.FetchUsers(searchReq)
+				u, err := ak.Paginator(searchReq, ak.PaginatorOptions{
+					PageSize: 100,
+					Logger:   ds.log,
+				})
 				uapisp.Finish()
-
+				if err != nil {
+					return err
+				}
 				users = &u
 			} else {
 				if flags.UserInfo == nil {
@@ -155,7 +155,7 @@ func (ds *DirectSearcher) Search(req *search.Request) (ldap.ServerSearchResult, 
 	if needGroups {
 		errs.Go(func() error {
 			gapisp := sentry.StartSpan(errCtx, "authentik.providers.ldap.search.api_group")
-			searchReq, skip := utils.ParseFilterForGroup(c.CoreApi.CoreGroupsList(gapisp.Context()), parsedFilter, false)
+			searchReq, skip := utils.ParseFilterForGroup(c.CoreApi.CoreGroupsList(gapisp.Context()).IncludeUsers(true), parsedFilter, false)
 			if skip {
 				req.Log().Trace("Skip backend request")
 				return nil
@@ -166,8 +166,14 @@ func (ds *DirectSearcher) Search(req *search.Request) (ldap.ServerSearchResult, 
 				searchReq = searchReq.MembersByPk([]int32{flags.UserPk})
 			}
 
-			g := paginator.FetchGroups(searchReq)
+			g, err := ak.Paginator(searchReq, ak.PaginatorOptions{
+				PageSize: 100,
+				Logger:   ds.log,
+			})
 			gapisp.Finish()
+			if err != nil {
+				return err
+			}
 			req.Log().WithField("count", len(g)).Trace("Got results from API")
 
 			if !flags.CanSearch {
@@ -182,7 +188,6 @@ func (ds *DirectSearcher) Search(req *search.Request) (ldap.ServerSearchResult, 
 					}
 				}
 			}
-
 			groups = &g
 			return nil
 		})
@@ -197,12 +202,12 @@ func (ds *DirectSearcher) Search(req *search.Request) (ldap.ServerSearchResult, 
 	if scope >= 0 && (strings.EqualFold(req.BaseDN, ds.si.GetBaseDN()) || utils.HasSuffixNoCase(req.BaseDN, ds.si.GetBaseUserDN())) {
 		singleu := utils.HasSuffixNoCase(req.BaseDN, ","+ds.si.GetBaseUserDN())
 
-		if !singleu && utils.IncludeObjectClass(filterOC, constants.GetContainerOCs()) {
-			entries = append(entries, utils.GetContainerEntry(filterOC, ds.si.GetBaseUserDN(), constants.OUUsers))
+		if !singleu && utils.IncludeObjectClass(req.FilterObjectClass, constants.GetContainerOCs()) {
+			entries = append(entries, utils.GetContainerEntry(req.FilterObjectClass, ds.si.GetBaseUserDN(), constants.OUUsers))
 			scope -= 1
 		}
 
-		if scope >= 0 && users != nil && utils.IncludeObjectClass(filterOC, constants.GetUserOCs()) {
+		if scope >= 0 && users != nil && utils.IncludeObjectClass(req.FilterObjectClass, constants.GetUserOCs()) {
 			for _, u := range *users {
 				entry := ds.si.UserEntry(u)
 				if strings.EqualFold(req.BaseDN, entry.DN) || !singleu {
@@ -217,12 +222,12 @@ func (ds *DirectSearcher) Search(req *search.Request) (ldap.ServerSearchResult, 
 	if scope >= 0 && (strings.EqualFold(req.BaseDN, ds.si.GetBaseDN()) || utils.HasSuffixNoCase(req.BaseDN, ds.si.GetBaseGroupDN())) {
 		singleg := utils.HasSuffixNoCase(req.BaseDN, ","+ds.si.GetBaseGroupDN())
 
-		if !singleg && utils.IncludeObjectClass(filterOC, constants.GetContainerOCs()) {
-			entries = append(entries, utils.GetContainerEntry(filterOC, ds.si.GetBaseGroupDN(), constants.OUGroups))
+		if !singleg && utils.IncludeObjectClass(req.FilterObjectClass, constants.GetContainerOCs()) {
+			entries = append(entries, utils.GetContainerEntry(req.FilterObjectClass, ds.si.GetBaseGroupDN(), constants.OUGroups))
 			scope -= 1
 		}
 
-		if scope >= 0 && groups != nil && utils.IncludeObjectClass(filterOC, constants.GetGroupOCs()) {
+		if scope >= 0 && groups != nil && utils.IncludeObjectClass(req.FilterObjectClass, constants.GetGroupOCs()) {
 			for _, g := range *groups {
 				entry := group.FromAPIGroup(g, ds.si).Entry()
 				if strings.EqualFold(req.BaseDN, entry.DN) || !singleg {
@@ -237,12 +242,12 @@ func (ds *DirectSearcher) Search(req *search.Request) (ldap.ServerSearchResult, 
 	if scope >= 0 && (strings.EqualFold(req.BaseDN, ds.si.GetBaseDN()) || utils.HasSuffixNoCase(req.BaseDN, ds.si.GetBaseVirtualGroupDN())) {
 		singlevg := utils.HasSuffixNoCase(req.BaseDN, ","+ds.si.GetBaseVirtualGroupDN())
 
-		if !singlevg && utils.IncludeObjectClass(filterOC, constants.GetContainerOCs()) {
-			entries = append(entries, utils.GetContainerEntry(filterOC, ds.si.GetBaseVirtualGroupDN(), constants.OUVirtualGroups))
+		if !singlevg && utils.IncludeObjectClass(req.FilterObjectClass, constants.GetContainerOCs()) {
+			entries = append(entries, utils.GetContainerEntry(req.FilterObjectClass, ds.si.GetBaseVirtualGroupDN(), constants.OUVirtualGroups))
 			scope -= 1
 		}
 
-		if scope >= 0 && users != nil && utils.IncludeObjectClass(filterOC, constants.GetVirtualGroupOCs()) {
+		if scope >= 0 && users != nil && utils.IncludeObjectClass(req.FilterObjectClass, constants.GetVirtualGroupOCs()) {
 			for _, u := range *users {
 				entry := group.FromAPIUser(u, ds.si).Entry()
 				if strings.EqualFold(req.BaseDN, entry.DN) || !singlevg {

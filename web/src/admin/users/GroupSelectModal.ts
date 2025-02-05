@@ -1,13 +1,11 @@
 import { DEFAULT_CONFIG } from "@goauthentik/common/api/config";
-import { uiConfig } from "@goauthentik/common/ui/config";
-import { PFColor } from "@goauthentik/elements/Label";
+import "@goauthentik/components/ak-status-label";
 import "@goauthentik/elements/buttons/SpinnerButton";
 import { PaginatedResponse } from "@goauthentik/elements/table/Table";
 import { TableColumn } from "@goauthentik/elements/table/Table";
 import { TableModal } from "@goauthentik/elements/table/TableModal";
 
-import { t } from "@lingui/macro";
-
+import { msg } from "@lit/localize";
 import { CSSResult, TemplateResult, html } from "lit";
 import { customElement, property } from "lit/decorators.js";
 
@@ -33,20 +31,18 @@ export class GroupSelectModal extends TableModal<Group> {
         return super.styles.concat(PFBanner);
     }
 
-    async apiEndpoint(page: number): Promise<PaginatedResponse<Group>> {
+    async apiEndpoint(): Promise<PaginatedResponse<Group>> {
         return new CoreApi(DEFAULT_CONFIG).coreGroupsList({
-            ordering: this.order,
-            page: page,
-            pageSize: (await uiConfig()).pagination.perPage,
-            search: this.search || "",
+            ...(await this.defaultEndpointConfig()),
+            includeUsers: false,
         });
     }
 
     columns(): TableColumn[] {
         return [
-            new TableColumn(t`Name`, "username"),
-            new TableColumn(t`Superuser`, "is_superuser"),
-            new TableColumn(t`Members`, ""),
+            new TableColumn(msg("Name"), "username"),
+            new TableColumn(msg("Superuser"), "is_superuser"),
+            new TableColumn(msg("Members"), ""),
         ];
     }
 
@@ -55,9 +51,7 @@ export class GroupSelectModal extends TableModal<Group> {
             html`<div>
                 <div>${item.name}</div>
             </div>`,
-            html` <ak-label color=${item.isSuperuser ? PFColor.Green : PFColor.Grey}>
-                ${item.isSuperuser ? t`Yes` : t`No`}
-            </ak-label>`,
+            html` <ak-status-label type="info" ?good=${item.isSuperuser}></ak-status-label>`,
             html`${(item.users || []).length}`,
         ];
     }
@@ -70,13 +64,15 @@ export class GroupSelectModal extends TableModal<Group> {
         const willSuperuser = this.selectedElements.filter((g) => g.isSuperuser).length > 0;
         return html`<section class="pf-c-modal-box__header pf-c-page__main-section pf-m-light">
                 <div class="pf-c-content">
-                    <h1 class="pf-c-title pf-m-2xl">${t`Select groups to add user to`}</h1>
+                    <h1 class="pf-c-title pf-m-2xl">${msg("Select groups to add user to")}</h1>
                 </div>
             </section>
             ${willSuperuser
                 ? html`
                       <div class="pf-c-banner pf-m-warning">
-                          ${t`Warning: Adding the user to the selected group(s) will give them superuser permissions.`}
+                          ${msg(
+                              "Warning: Adding the user to the selected group(s) will give them superuser permissions.",
+                          )}
                       </div>
                   `
                 : html``}
@@ -90,7 +86,7 @@ export class GroupSelectModal extends TableModal<Group> {
                     }}
                     class="pf-m-primary"
                 >
-                    ${t`Add`} </ak-spinner-button
+                    ${msg("Add")} </ak-spinner-button
                 >&nbsp;
                 <ak-spinner-button
                     .callAction=${async () => {
@@ -98,8 +94,14 @@ export class GroupSelectModal extends TableModal<Group> {
                     }}
                     class="pf-m-secondary"
                 >
-                    ${t`Cancel`}
+                    ${msg("Cancel")}
                 </ak-spinner-button>
             </footer>`;
+    }
+}
+
+declare global {
+    interface HTMLElementTagNameMap {
+        "ak-user-group-select-table": GroupSelectModal;
     }
 }

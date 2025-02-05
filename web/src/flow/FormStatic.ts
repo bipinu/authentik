@@ -1,7 +1,6 @@
 import { AKElement } from "@goauthentik/elements/Base";
 
-import { t } from "@lingui/macro";
-
+import { msg } from "@lit/localize";
 import { CSSResult, TemplateResult, css, html } from "lit";
 import { customElement, property } from "lit/decorators.js";
 import { ifDefined } from "lit/directives/if-defined.js";
@@ -53,12 +52,18 @@ export class FormStatic extends AKElement {
                     <img
                         class="pf-c-avatar"
                         src="${ifDefined(this.userAvatar)}"
-                        alt="${t`User's avatar`}"
+                        alt="${msg("User's avatar")}"
                     />
                     ${this.user}
                 </div>
                 <slot name="link"></slot>
             </div>
         `;
+    }
+}
+
+declare global {
+    interface HTMLElementTagNameMap {
+        "ak-form-static": FormStatic;
     }
 }

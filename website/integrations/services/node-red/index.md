@@ -1,18 +1,19 @@
 ---
-title: Node-RED
+title: Integrate with Node-RED
+sidebar_label: Node-RED
 ---
+
+# Integrate with Node-RED
 
 <span class="badge badge--secondary">Support level: Community</span>
 
 ## What is Node-RED
 
-From https://nodered.org/
-
-:::note
-Node-RED is a programming tool for wiring together hardware devices, APIs and online services in new and interesting ways.
-
-It provides a browser-based editor that makes it easy to wire together flows using the wide range of nodes in the palette that can be deployed to its runtime in a single-click.
-:::
+> Node-RED is a programming tool for wiring together hardware devices, APIs and online services in new and interesting ways.
+>
+> It provides a browser-based editor that makes it easy to wire together flows using the wide range of nodes in the palette that can be deployed to its runtime in a single-click.
+>
+> -- https://nodered.org/
 
 :::caution
 This requires modification of the Node-RED settings.js and installing additional Passport-js packages, see [Securing Node-RED](https://nodered.org/docs/user-guide/runtime/securing-node-red#oauthopenid-based-authentication) documentation for further details.
@@ -20,25 +21,29 @@ This requires modification of the Node-RED settings.js and installing additional
 
 ## Preparation
 
-The following placeholders will be used:
+The following placeholders are used in this guide:
 
--   `authentik.company` is the FQDN of authentik.
--   `nodred.company` is the FQDN of Node-RED.
+- `authentik.company` is the FQDN of authentik.
+- `nodred.company` is the FQDN of Node-RED.
+
+:::note
+This documentation lists only the settings that you need to change from their default values. Be aware that any changes other than those explicitly mentioned in this guide could cause issues accessing your application.
+:::
 
 ### Step 1
 
-In authentik, create an _OAuth2/OpenID Provider_ (under _Resources/Providers_) with these settings:
+In authentik, create an _OAuth2/OpenID Provider_ (under _Applications/Providers_) with these settings:
 
 :::note
 Only settings that have been modified from default have been listed.
 :::
 
--   Name: Node-RED
+- Name: Node-RED
 
 **Protocol Settings**
 
--   Redirect URIs/Origins (RegEx): https://nodred.company/auth/strategy/callback/
--   Signing Key: Select any available key
+- Redirect URIs/Origins (RegEx): https://nodred.company/auth/strategy/callback/
+- Signing Key: Select any available key
 
 :::note
 Take note of the `Client ID` and `Client Secret`, you'll need to give them to Node-RED in _Step 3_.
@@ -52,13 +57,13 @@ In authentik, create an application (under _Resources/Applications_) which uses 
 Only settings that have been modified from default have been listed.
 :::
 
--   Name: Node-RED
--   Slug: nodered-slug
--   Provider: Node-RED
+- Name: Node-RED
+- Slug: nodered-slug
+- Provider: Node-RED
 
 Optionally you can link directly to the authentication strategy
 
--   Launch URL: https://nodred.company/auth/strategy/
+- Launch URL: https://nodred.company/auth/strategy/
 
 ### Step 3
 

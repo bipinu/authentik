@@ -7,9 +7,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/go-openapi/strfmt"
 	log "github.com/sirupsen/logrus"
+
 	"goauthentik.io/api/v3"
+	"goauthentik.io/internal/outpost/ak"
 	"goauthentik.io/internal/outpost/ldap/bind"
 	directbind "goauthentik.io/internal/outpost/ldap/bind/direct"
 	memorybind "goauthentik.io/internal/outpost/ldap/bind/memory"
@@ -21,34 +22,26 @@ import (
 
 func (ls *LDAPServer) getCurrentProvider(pk int32) *ProviderInstance {
 	for _, p := range ls.providers {
-		if p.outpostPk == pk {
+		if p.providerPk == pk {
 			return p
 		}
 	}
 	return nil
 }
 
-func (ls *LDAPServer) getInvalidationFlow() string {
-	req, _, err := ls.ac.Client.CoreApi.CoreTenantsCurrentRetrieve(context.Background()).Execute()
-	if err != nil {
-		ls.log.WithError(err).Warning("failed to fetch tenant config")
-		return ""
-	}
-	flow := req.GetFlowInvalidation()
-	return flow
-}
-
 func (ls *LDAPServer) Refresh() error {
-	outposts, _, err := ls.ac.Client.OutpostsApi.OutpostsLdapList(context.Background()).Execute()
+	apiProviders, err := ak.Paginator(ls.ac.Client.OutpostsApi.OutpostsLdapList(context.Background()), ak.PaginatorOptions{
+		PageSize: 100,
+		Logger:   ls.log,
+	})
 	if err != nil {
 		return err
 	}
-	if len(outposts.Results) < 1 {
+	if len(apiProviders) < 1 {
 		return errors.New("no ldap provider defined")
 	}
-	providers := make([]*ProviderInstance, len(outposts.Results))
-	invalidationFlow := ls.getInvalidationFlow()
-	for idx, provider := range outposts.Results {
+	providers := make([]*ProviderInstance, len(apiProviders))
+	for idx, provider := range apiProviders {
 		userDN := strings.ToLower(fmt.Sprintf("ou=%s,%s", constants.OUUsers, *provider.BaseDn))
 		groupDN := strings.ToLower(fmt.Sprintf("ou=%s,%s", constants.OUGroups, *provider.BaseDn))
 		virtualGroupDN := strings.ToLower(fmt.Sprintf("ou=%s,%s", constants.OUVirtualGroups, *provider.BaseDn))
@@ -56,31 +49,32 @@ func (ls *LDAPServer) Refresh() error {
 
 		// Get existing instance so we can transfer boundUsers
 		existing := ls.getCurrentProvider(provider.Pk)
+		usersMutex := &sync.RWMutex{}
 		users := make(map[string]*flags.UserFlags)
 		if existing != nil {
-			existing.boundUsersMutex.RLock()
+			usersMutex = existing.boundUsersMutex
+			// Shallow copy, no need to lock
 			users = existing.boundUsers
-			existing.boundUsersMutex.RUnlock()
 		}
 
 		providers[idx] = &ProviderInstance{
-			BaseDN:                 *provider.BaseDn,
+			BaseDN:                 provider.GetBaseDn(),
 			VirtualGroupDN:         virtualGroupDN,
 			GroupDN:                groupDN,
 			UserDN:                 userDN,
 			appSlug:                provider.ApplicationSlug,
 			authenticationFlowSlug: provider.BindFlowSlug,
-			invalidationFlowSlug:   invalidationFlow,
-			searchAllowedGroups:    []*strfmt.UUID{(*strfmt.UUID)(provider.SearchGroup.Get())},
-			boundUsersMutex:        sync.RWMutex{},
+			invalidationFlowSlug:   provider.UnbindFlowSlug.Get(),
+			boundUsersMutex:        usersMutex,
 			boundUsers:             users,
 			s:                      ls,
 			log:                    logger,
 			tlsServerName:          provider.TlsServerName,
-			uidStartNumber:         *provider.UidStartNumber,
-			gidStartNumber:         *provider.GidStartNumber,
+			uidStartNumber:         provider.GetUidStartNumber(),
+			gidStartNumber:         provider.GetGidStartNumber(),
+			mfaSupport:             provider.GetMfaSupport(),
 			outpostName:            ls.ac.Outpost.Name,
-			outpostPk:              provider.Pk,
+			providerPk:             provider.Pk,
 		}
 		if kp := provider.Certificate.Get(); kp != nil {
 			err := ls.cs.AddKeypair(*kp)

@@ -1,13 +1,16 @@
 import { AKElement } from "@goauthentik/elements/Base";
 import "@goauthentik/elements/sidebar/SidebarBrand";
-import "@goauthentik/elements/sidebar/SidebarUser";
+import "@goauthentik/elements/sidebar/SidebarVersion";
 
+import { msg } from "@lit/localize";
 import { CSSResult, TemplateResult, css, html } from "lit";
 import { customElement } from "lit/decorators.js";
 
 import PFNav from "@patternfly/patternfly/components/Nav/nav.css";
 import PFPage from "@patternfly/patternfly/components/Page/page.css";
 import PFBase from "@patternfly/patternfly/patternfly-base.css";
+
+import { UiThemeEnum } from "@goauthentik/api";
 
 @customElement("ak-sidebar")
 export class Sidebar extends AKElement {
@@ -25,6 +28,9 @@ export class Sidebar extends AKElement {
                 .pf-c-nav__item.pf-m-current:not(.pf-m-expanded) .pf-c-nav__link::after {
                     --pf-c-nav__link--m-current--after--BorderColor: #fd4b2d;
                 }
+                :host([theme="light"]) {
+                    border-right-color: transparent !important;
+                }
 
                 .pf-c-nav__section + .pf-c-nav__section {
                     --pf-c-nav__section--section--MarginTop: var(--pf-global--spacer--sm);
@@ -36,7 +42,6 @@ export class Sidebar extends AKElement {
                 nav {
                     display: flex;
                     flex-direction: column;
-                    max-height: 100vh;
                     height: 100%;
                     overflow-y: hidden;
                 }
@@ -61,12 +66,21 @@ export class Sidebar extends AKElement {
     }
 
     render(): TemplateResult {
-        return html`<nav class="pf-c-nav" aria-label="Global">
+        return html`<nav
+            class="pf-c-nav ${this.activeTheme === UiThemeEnum.Light ? "pf-m-light" : ""}"
+            aria-label=${msg("Global")}
+        >
             <ak-sidebar-brand></ak-sidebar-brand>
             <ul class="pf-c-nav__list">
                 <slot></slot>
             </ul>
-            <ak-sidebar-user></ak-sidebar-user>
+            <ak-sidebar-version></ak-sidebar-version>
         </nav>`;
+    }
+}
+
+declare global {
+    interface HTMLElementTagNameMap {
+        "ak-sidebar": Sidebar;
     }
 }

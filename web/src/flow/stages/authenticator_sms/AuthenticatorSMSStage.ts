@@ -3,8 +3,7 @@ import "@goauthentik/elements/forms/FormElement";
 import "@goauthentik/flow/FormStatic";
 import { BaseStage } from "@goauthentik/flow/stages/base";
 
-import { t } from "@lingui/macro";
-
+import { msg } from "@lit/localize";
 import { CSSResult, TemplateResult, html } from "lit";
 import { customElement } from "lit/decorators.js";
 import { ifDefined } from "lit/directives/if-defined.js";
@@ -49,34 +48,30 @@ export class AuthenticatorSMSStage extends BaseStage<
                     >
                         <div slot="link">
                             <a href="${ifDefined(this.challenge.flowInfo?.cancelUrl)}"
-                                >${t`Not you?`}</a
+                                >${msg("Not you?")}</a
                             >
                         </div>
                     </ak-form-static>
                     <ak-form-element
-                        label="${t`Phone number`}"
-                        ?required="${true}"
+                        label="${msg("Phone number")}"
+                        required
                         class="pf-c-form__group"
                         .errors=${(this.challenge?.responseErrors || {})["phone_number"]}
                     >
                         <input
                             type="tel"
                             name="phoneNumber"
-                            placeholder="${t`Please enter your Phone number.`}"
+                            placeholder="${msg("Please enter your Phone number.")}"
                             autofocus=""
                             autocomplete="tel"
                             class="pf-c-form-control"
                             required
                         />
                     </ak-form-element>
-                    ${"non_field_errors" in (this.challenge?.responseErrors || {})
-                        ? this.renderNonFieldErrors(
-                              this.challenge?.responseErrors?.non_field_errors || [],
-                          )
-                        : html``}
+                    ${this.renderNonFieldErrors()}
                     <div class="pf-c-form__group pf-m-action">
                         <button type="submit" class="pf-c-button pf-m-primary pf-m-block">
-                            ${t`Continue`}
+                            ${msg("Continue")}
                         </button>
                     </div>
                 </form>
@@ -104,37 +99,32 @@ export class AuthenticatorSMSStage extends BaseStage<
                     >
                         <div slot="link">
                             <a href="${ifDefined(this.challenge.flowInfo?.cancelUrl)}"
-                                >${t`Not you?`}</a
+                                >${msg("Not you?")}</a
                             >
                         </div>
                     </ak-form-static>
                     <ak-form-element
-                        label="${t`Code`}"
-                        ?required="${true}"
+                        label="${msg("Code")}"
+                        required
                         class="pf-c-form__group"
                         .errors=${(this.challenge?.responseErrors || {})["code"]}
                     >
-                        <!-- @ts-ignore -->
                         <input
                             type="text"
                             name="code"
                             inputmode="numeric"
                             pattern="[0-9]*"
-                            placeholder="${t`Please enter the code you received via SMS`}"
+                            placeholder="${msg("Please enter the code you received via SMS")}"
                             autofocus=""
                             autocomplete="one-time-code"
                             class="pf-c-form-control"
                             required
                         />
                     </ak-form-element>
-                    ${"non_field_errors" in (this.challenge?.responseErrors || {})
-                        ? this.renderNonFieldErrors(
-                              this.challenge?.responseErrors?.non_field_errors || [],
-                          )
-                        : html``}
+                    ${this.renderNonFieldErrors()}
                     <div class="pf-c-form__group pf-m-action">
                         <button type="submit" class="pf-c-button pf-m-primary pf-m-block">
-                            ${t`Continue`}
+                            ${msg("Continue")}
                         </button>
                     </div>
                 </form>
@@ -146,11 +136,17 @@ export class AuthenticatorSMSStage extends BaseStage<
 
     render(): TemplateResult {
         if (!this.challenge) {
-            return html`<ak-empty-state ?loading="${true}" header=${t`Loading`}> </ak-empty-state>`;
+            return html`<ak-empty-state loading> </ak-empty-state>`;
         }
         if (this.challenge.phoneNumberRequired) {
             return this.renderPhoneNumber();
         }
         return this.renderCode();
+    }
+}
+
+declare global {
+    interface HTMLElementTagNameMap {
+        "ak-stage-authenticator-sms": AuthenticatorSMSStage;
     }
 }

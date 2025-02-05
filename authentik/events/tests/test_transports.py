@@ -1,4 +1,5 @@
 """transport tests"""
+
 from unittest.mock import PropertyMock, patch
 
 from django.core import mail
@@ -52,6 +53,8 @@ class TestEventTransports(TestCase):
                     "severity": "alert",
                     "user_email": self.user.email,
                     "user_username": self.user.username,
+                    "event_user_email": self.user.email,
+                    "event_user_username": self.user.username,
                 },
             )
 
@@ -107,6 +110,7 @@ class TestEventTransports(TestCase):
                                     "value": self.user.username,
                                     "short": True,
                                 },
+                                {"short": True, "title": "Event user", "value": self.user.username},
                                 {"title": "foo", "value": "bar,"},
                             ],
                             "footer": f"authentik {get_full_version()}",

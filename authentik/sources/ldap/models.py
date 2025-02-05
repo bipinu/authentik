@@ -1,11 +1,18 @@
 """authentik LDAP Models"""
-from ssl import CERT_REQUIRED
-from typing import Optional
 
-from django.db import models
+from os import chmod
+from os.path import dirname, exists
+from shutil import rmtree
+from ssl import CERT_REQUIRED
+from tempfile import NamedTemporaryFile, mkdtemp
+from typing import Any
+
+import pglock
+from django.db import connection, models
+from django.templatetags.static import static
 from django.utils.translation import gettext_lazy as _
 from ldap3 import ALL, NONE, RANDOM, Connection, Server, ServerPool, Tls
-from ldap3.core.exceptions import LDAPSchemaError
+from ldap3.core.exceptions import LDAPException, LDAPInsufficientAccessRightsResult, LDAPSchemaError
 from rest_framework.serializers import Serializer
 
 from authentik.core.models import Group, PropertyMapping, Source
@@ -14,6 +21,19 @@ from authentik.lib.config import CONFIG
 from authentik.lib.models import DomainlessURLValidator
 
 LDAP_TIMEOUT = 15
+LDAP_UNIQUENESS = "ldap_uniq"
+LDAP_DISTINGUISHED_NAME = "distinguishedName"
+
+
+def flatten(value: Any) -> Any:
+    """Flatten `value` if its a list, set or tuple"""
+    if isinstance(value, list | set | tuple):
+        if len(value) < 1:
+            return None
+        if isinstance(value, set):
+            return value.pop()
+        return value[0]
+    return value
 
 
 class MultiURLValidator(DomainlessURLValidator):
@@ -39,14 +59,24 @@ class LDAPSource(Source):
         on_delete=models.SET_DEFAULT,
         default=None,
         null=True,
+        related_name="ldap_peer_certificates",
         help_text=_(
             "Optionally verify the LDAP Server's Certificate against the CA Chain in this keypair."
         ),
+    )
+    client_certificate = models.ForeignKey(
+        CertificateKeyPair,
+        on_delete=models.SET_DEFAULT,
+        default=None,
+        null=True,
+        related_name="ldap_client_certificates",
+        help_text=_("Client certificate to authenticate against the LDAP Server's Certificate."),
     )
 
     bind_cn = models.TextField(verbose_name=_("Bind CN"), blank=True)
     bind_password = models.TextField(blank=True)
     start_tls = models.BooleanField(default=False, verbose_name=_("Enable Start TLS"))
+    sni = models.BooleanField(default=False, verbose_name=_("Use Server URI for SNI verification"))
 
     base_dn = models.TextField(verbose_name=_("Base DN"))
     additional_user_dn = models.TextField(
@@ -75,11 +105,9 @@ class LDAPSource(Source):
         default="objectSid", help_text=_("Field which contains a unique Identifier.")
     )
 
-    property_mappings_group = models.ManyToManyField(
-        PropertyMapping,
-        default=None,
-        blank=True,
-        help_text=_("Property mappings used for group creation/updating."),
+    password_login_update_internal_password = models.BooleanField(
+        default=False,
+        help_text=_("Update internal authentik password when login succeeds with LDAP"),
     )
 
     sync_users = models.BooleanField(default=True)
@@ -105,15 +133,58 @@ class LDAPSource(Source):
 
         return LDAPSourceSerializer
 
-    def server(self, **kwargs) -> Server:
+    @property
+    def property_mapping_type(self) -> "type[PropertyMapping]":
+        from authentik.sources.ldap.models import LDAPSourcePropertyMapping
+
+        return LDAPSourcePropertyMapping
+
+    def update_properties_with_uniqueness_field(self, properties, dn, ldap, **kwargs):
+        properties.setdefault("attributes", {})[LDAP_DISTINGUISHED_NAME] = dn
+        if self.object_uniqueness_field in ldap:
+            properties["attributes"][LDAP_UNIQUENESS] = flatten(
+                ldap.get(self.object_uniqueness_field)
+            )
+        return properties
+
+    def get_base_user_properties(self, **kwargs):
+        return self.update_properties_with_uniqueness_field({}, **kwargs)
+
+    def get_base_group_properties(self, **kwargs):
+        return self.update_properties_with_uniqueness_field(
+            {
+                "parent": self.sync_parent_group,
+            },
+            **kwargs,
+        )
+
+    @property
+    def icon_url(self) -> str:
+        return static("authentik/sources/ldap.png")
+
+    def server(self, **kwargs) -> ServerPool:
         """Get LDAP Server/ServerPool"""
         servers = []
         tls_kwargs = {}
         if self.peer_certificate:
             tls_kwargs["ca_certs_data"] = self.peer_certificate.certificate_data
             tls_kwargs["validate"] = CERT_REQUIRED
-        if ciphers := CONFIG.y("ldap.tls.ciphers", None):
+        if self.client_certificate:
+            temp_dir = mkdtemp()
+            with NamedTemporaryFile(mode="w", delete=False, dir=temp_dir) as temp_cert:
+                temp_cert.write(self.client_certificate.certificate_data)
+                certificate_file = temp_cert.name
+                chmod(certificate_file, 0o600)
+            with NamedTemporaryFile(mode="w", delete=False, dir=temp_dir) as temp_key:
+                temp_key.write(self.client_certificate.key_data)
+                private_key_file = temp_key.name
+                chmod(private_key_file, 0o600)
+            tls_kwargs["local_private_key_file"] = private_key_file
+            tls_kwargs["local_certificate_file"] = certificate_file
+        if ciphers := CONFIG.get("ldap.tls.ciphers", None):
             tls_kwargs["ciphers"] = ciphers.strip()
+        if self.sni:
+            tls_kwargs["sni"] = self.server_uri.split(",", maxsplit=1)[0].strip()
         server_kwargs = {
             "get_info": ALL,
             "connect_timeout": LDAP_TIMEOUT,
@@ -125,59 +196,111 @@ class LDAPSource(Source):
                 servers.append(Server(server, **server_kwargs))
         else:
             servers = [Server(self.server_uri, **server_kwargs)]
-        return ServerPool(servers, RANDOM, active=True, exhaust=True)
+        return ServerPool(servers, RANDOM, active=5, exhaust=True)
 
     def connection(
-        self, server_kwargs: Optional[dict] = None, connection_kwargs: Optional[dict] = None
+        self,
+        server: Server | None = None,
+        server_kwargs: dict | None = None,
+        connection_kwargs: dict | None = None,
     ) -> Connection:
         """Get a fully connected and bound LDAP Connection"""
         server_kwargs = server_kwargs or {}
         connection_kwargs = connection_kwargs or {}
-        connection_kwargs.setdefault("user", self.bind_cn)
-        connection_kwargs.setdefault("password", self.bind_password)
-        connection = Connection(
-            self.server(**server_kwargs),
+        if self.bind_cn is not None:
+            connection_kwargs.setdefault("user", self.bind_cn)
+        if self.bind_password is not None:
+            connection_kwargs.setdefault("password", self.bind_password)
+        conn = Connection(
+            server or self.server(**server_kwargs),
             raise_exceptions=True,
             receive_timeout=LDAP_TIMEOUT,
             **connection_kwargs,
         )
 
         if self.start_tls:
-            connection.start_tls(read_server_info=False)
+            conn.start_tls(read_server_info=False)
         try:
-            connection.bind()
-        except LDAPSchemaError as exc:
+            successful = conn.bind()
+            if successful:
+                return conn
+        except (LDAPSchemaError, LDAPInsufficientAccessRightsResult) as exc:
             # Schema error, so try connecting without schema info
             # See https://github.com/goauthentik/authentik/issues/4590
+            # See also https://github.com/goauthentik/authentik/issues/3399
             if server_kwargs.get("get_info", ALL) == NONE:
                 raise exc
             server_kwargs["get_info"] = NONE
-            return self.connection(server_kwargs, connection_kwargs)
-        return connection
+            return self.connection(server, server_kwargs, connection_kwargs)
+        finally:
+            if conn.server.tls.certificate_file is not None and exists(
+                conn.server.tls.certificate_file
+            ):
+                rmtree(dirname(conn.server.tls.certificate_file))
+        return RuntimeError("Failed to bind")
+
+    @property
+    def sync_lock(self) -> pglock.advisory:
+        """Postgres lock for syncing LDAP to prevent multiple parallel syncs happening"""
+        return pglock.advisory(
+            lock_id=f"goauthentik.io/{connection.schema_name}/sources/ldap/sync/{self.slug}",
+            timeout=0,
+            side_effect=pglock.Return,
+        )
+
+    def check_connection(self) -> dict[str, dict[str, str]]:
+        """Check LDAP Connection"""
+        servers = self.server()
+        server_info = {}
+        # Check each individual server
+        for server in servers.servers:
+            server: Server
+            try:
+                conn = self.connection(server=server)
+                server_info[server.host] = {
+                    "vendor": str(flatten(conn.server.info.vendor_name)),
+                    "version": str(flatten(conn.server.info.vendor_version)),
+                    "status": "ok",
+                }
+            except LDAPException as exc:
+                server_info[server.host] = {
+                    "status": str(exc),
+                }
+        # Check server pool
+        try:
+            conn = self.connection()
+            server_info["__all__"] = {
+                "vendor": str(flatten(conn.server.info.vendor_name)),
+                "version": str(flatten(conn.server.info.vendor_version)),
+                "status": "ok",
+            }
+        except LDAPException as exc:
+            server_info["__all__"] = {
+                "status": str(exc),
+            }
+        return server_info
 
     class Meta:
         verbose_name = _("LDAP Source")
         verbose_name_plural = _("LDAP Sources")
 
 
-class LDAPPropertyMapping(PropertyMapping):
+class LDAPSourcePropertyMapping(PropertyMapping):
     """Map LDAP Property to User or Group object attribute"""
-
-    object_field = models.TextField()
 
     @property
     def component(self) -> str:
-        return "ak-property-mapping-ldap-form"
+        return "ak-property-mapping-source-ldap-form"
 
     @property
     def serializer(self) -> type[Serializer]:
-        from authentik.sources.ldap.api import LDAPPropertyMappingSerializer
+        from authentik.sources.ldap.api import LDAPSourcePropertyMappingSerializer
 
-        return LDAPPropertyMappingSerializer
+        return LDAPSourcePropertyMappingSerializer
 
     def __str__(self):
         return str(self.name)
 
     class Meta:
-        verbose_name = _("LDAP Property Mapping")
-        verbose_name_plural = _("LDAP Property Mappings")
+        verbose_name = _("LDAP Source Property Mapping")
+        verbose_name_plural = _("LDAP Source Property Mappings")

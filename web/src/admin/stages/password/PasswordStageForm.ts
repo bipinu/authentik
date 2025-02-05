@@ -1,16 +1,14 @@
 import { RenderFlowOption } from "@goauthentik/admin/flows/utils";
+import { BaseStageForm } from "@goauthentik/admin/stages/BaseStageForm";
 import { DEFAULT_CONFIG } from "@goauthentik/common/api/config";
-import { first } from "@goauthentik/common/utils";
+import "@goauthentik/components/ak-switch-input.js";
 import "@goauthentik/elements/forms/FormGroup";
 import "@goauthentik/elements/forms/HorizontalFormElement";
-import { ModelForm } from "@goauthentik/elements/forms/ModelForm";
 import "@goauthentik/elements/forms/SearchSelect";
 
-import { t } from "@lingui/macro";
-
+import { msg } from "@lit/localize";
 import { TemplateResult, html } from "lit";
 import { customElement } from "lit/decorators.js";
-import { ifDefined } from "lit/directives/if-defined.js";
 
 import {
     BackendsEnum,
@@ -23,19 +21,11 @@ import {
 } from "@goauthentik/api";
 
 @customElement("ak-stage-password-form")
-export class PasswordStageForm extends ModelForm<PasswordStage, string> {
+export class PasswordStageForm extends BaseStageForm<PasswordStage> {
     loadInstance(pk: string): Promise<PasswordStage> {
         return new StagesApi(DEFAULT_CONFIG).stagesPasswordRetrieve({
             stageUuid: pk,
         });
-    }
-
-    getSuccessMessage(): string {
-        if (this.instance) {
-            return t`Successfully updated stage.`;
-        } else {
-            return t`Successfully created stage.`;
-        }
     }
 
     async send(data: PasswordStage): Promise<PasswordStage> {
@@ -63,61 +53,57 @@ export class PasswordStageForm extends ModelForm<PasswordStage, string> {
     }
 
     renderForm(): TemplateResult {
-        return html`<form class="pf-c-form pf-m-horizontal">
-            <div class="form-help-text">
-                ${t`Validate the user's password against the selected backend(s).`}
-            </div>
-            <ak-form-element-horizontal label=${t`Name`} ?required=${true} name="name">
+        const backends = [
+            {
+                name: BackendsEnum.AuthentikCoreAuthInbuiltBackend,
+                label: msg("User database + standard password"),
+            },
+            {
+                name: BackendsEnum.AuthentikCoreAuthTokenBackend,
+                label: msg("User database + app passwords"),
+            },
+            {
+                name: BackendsEnum.AuthentikSourcesLdapAuthLdapBackend,
+                label: msg("User database + LDAP password"),
+            },
+            {
+                name: BackendsEnum.AuthentikSourcesKerberosAuthKerberosBackend,
+                label: msg("User database + Kerberos password"),
+            },
+        ];
+
+        return html` <span>
+                ${msg("Validate the user's password against the selected backend(s).")}
+            </span>
+            <ak-form-element-horizontal label=${msg("Name")} required name="name">
                 <input
                     type="text"
-                    value="${ifDefined(this.instance?.name || "")}"
+                    value="${this.instance?.name || ""}"
                     class="pf-c-form-control"
                     required
                 />
             </ak-form-element-horizontal>
             <ak-form-group .expanded=${true}>
-                <span slot="header"> ${t`Stage-specific settings`} </span>
+                <span slot="header"> ${msg("Stage-specific settings")} </span>
                 <div slot="body" class="pf-c-form">
                     <ak-form-element-horizontal
-                        label=${t`Backends`}
+                        label=${msg("Backends")}
                         ?required=${true}
                         name="backends"
                     >
-                        <select name="users" class="pf-c-form-control" multiple>
-                            <option
-                                value=${BackendsEnum.CoreAuthInbuiltBackend}
-                                ?selected=${this.isBackendSelected(
-                                    BackendsEnum.CoreAuthInbuiltBackend,
-                                )}
-                            >
-                                ${t`User database + standard password`}
-                            </option>
-                            <option
-                                value=${BackendsEnum.CoreAuthTokenBackend}
-                                ?selected=${this.isBackendSelected(
-                                    BackendsEnum.CoreAuthTokenBackend,
-                                )}
-                            >
-                                ${t`User database + app passwords`}
-                            </option>
-                            <option
-                                value=${BackendsEnum.SourcesLdapAuthLdapBackend}
-                                ?selected=${this.isBackendSelected(
-                                    BackendsEnum.SourcesLdapAuthLdapBackend,
-                                )}
-                            >
-                                ${t`User database + LDAP password`}
-                            </option>
-                        </select>
+                        <ak-checkbox-group
+                            class="user-field-select"
+                            .options=${backends}
+                            .value=${backends
+                                .map(({ name }) => name)
+                                .filter((name) => this.isBackendSelected(name))}
+                        ></ak-checkbox-group>
                         <p class="pf-c-form__helper-text">
-                            ${t`Selection of backends to test the password against.`}
-                        </p>
-                        <p class="pf-c-form__helper-text">
-                            ${t`Hold control/command to select multiple items.`}
+                            ${msg("Selection of backends to test the password against.")}
                         </p>
                     </ak-form-element-horizontal>
                     <ak-form-element-horizontal
-                        label=${t`Configuration flow`}
+                        label=${msg("Configuration flow")}
                         ?required=${true}
                         name="configureFlow"
                     >
@@ -160,26 +146,41 @@ export class PasswordStageForm extends ModelForm<PasswordStage, string> {
                         >
                         </ak-search-select>
                         <p class="pf-c-form__helper-text">
-                            ${t`Flow used by an authenticated user to configure their password. If empty, user will not be able to configure change their password.`}
+                            ${msg(
+                                "Flow used by an authenticated user to configure their password. If empty, user will not be able to configure change their password.",
+                            )}
                         </p>
                     </ak-form-element-horizontal>
                     <ak-form-element-horizontal
-                        label=${t`Failed attempts before cancel`}
+                        label=${msg("Failed attempts before cancel")}
                         ?required=${true}
                         name="failedAttemptsBeforeCancel"
                     >
                         <input
                             type="number"
-                            value="${first(this.instance?.failedAttemptsBeforeCancel, 5)}"
+                            value="${this.instance?.failedAttemptsBeforeCancel ?? 5}"
                             class="pf-c-form-control"
                             required
                         />
                         <p class="pf-c-form__helper-text">
-                            ${t`How many attempts a user has before the flow is canceled. To lock the user out, use a reputation policy and a user_write stage.`}
+                            ${msg(
+                                "How many attempts a user has before the flow is canceled. To lock the user out, use a reputation policy and a user_write stage.",
+                            )}
                         </p>
                     </ak-form-element-horizontal>
+                    <ak-switch-input
+                        name="allowShowPassword"
+                        label="Allow Show Password"
+                        ?checked=${this.instance?.allowShowPassword ?? false}
+                        help=${msg("Provide users with a 'show password' button.")}
+                    ></ak-switch-input>
                 </div>
-            </ak-form-group>
-        </form>`;
+            </ak-form-group>`;
+    }
+}
+
+declare global {
+    interface HTMLElementTagNameMap {
+        "ak-stage-password-form": PasswordStageForm;
     }
 }

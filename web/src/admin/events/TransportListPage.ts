@@ -1,6 +1,6 @@
 import "@goauthentik/admin/events/TransportForm";
+import "@goauthentik/admin/rbac/ObjectPermissionModal";
 import { DEFAULT_CONFIG } from "@goauthentik/common/api/config";
-import { uiConfig } from "@goauthentik/common/ui/config";
 import "@goauthentik/elements/buttons/ActionButton";
 import "@goauthentik/elements/buttons/SpinnerButton";
 import "@goauthentik/elements/forms/DeleteBulkForm";
@@ -8,13 +8,17 @@ import "@goauthentik/elements/forms/ModalForm";
 import { PaginatedResponse } from "@goauthentik/elements/table/Table";
 import { TableColumn } from "@goauthentik/elements/table/Table";
 import { TablePage } from "@goauthentik/elements/table/TablePage";
+import "@patternfly/elements/pf-tooltip/pf-tooltip.js";
 
-import { t } from "@lingui/macro";
-
+import { msg } from "@lit/localize";
 import { TemplateResult, html } from "lit";
 import { customElement, property } from "lit/decorators.js";
 
-import { EventsApi, NotificationTransport } from "@goauthentik/api";
+import {
+    EventsApi,
+    NotificationTransport,
+    RbacPermissionsAssignedByUsersListModelEnum,
+} from "@goauthentik/api";
 
 @customElement("ak-event-transport-list")
 export class TransportListPage extends TablePage<NotificationTransport> {
@@ -22,41 +26,39 @@ export class TransportListPage extends TablePage<NotificationTransport> {
         return true;
     }
     pageTitle(): string {
-        return t`Notification Transports`;
+        return msg("Notification Transports");
     }
     pageDescription(): string {
-        return t`Define how notifications are sent to users, like Email or Webhook.`;
+        return msg("Define how notifications are sent to users, like Email or Webhook.");
     }
     pageIcon(): string {
         return "pf-icon pf-icon-export";
     }
 
     checkbox = true;
+    clearOnRefresh = true;
 
     @property()
     order = "name";
 
-    async apiEndpoint(page: number): Promise<PaginatedResponse<NotificationTransport>> {
-        return new EventsApi(DEFAULT_CONFIG).eventsTransportsList({
-            ordering: this.order,
-            page: page,
-            pageSize: (await uiConfig()).pagination.perPage,
-            search: this.search || "",
-        });
+    async apiEndpoint(): Promise<PaginatedResponse<NotificationTransport>> {
+        return new EventsApi(DEFAULT_CONFIG).eventsTransportsList(
+            await this.defaultEndpointConfig(),
+        );
     }
 
     columns(): TableColumn[] {
         return [
-            new TableColumn(t`Name`, "name"),
-            new TableColumn(t`Mode`, "mode"),
-            new TableColumn(t`Actions`),
+            new TableColumn(msg("Name"), "name"),
+            new TableColumn(msg("Mode"), "mode"),
+            new TableColumn(msg("Actions")),
         ];
     }
 
     renderToolbarSelected(): TemplateResult {
         const disabled = this.selectedElements.length < 1;
         return html`<ak-forms-delete-bulk
-            objectLabel=${t`Notification transport(s)`}
+            objectLabel=${msg("Notification transport(s)")}
             .objects=${this.selectedElements}
             .usedBy=${(item: NotificationTransport) => {
                 return new EventsApi(DEFAULT_CONFIG).eventsTransportsUsedByList({
@@ -70,7 +72,7 @@ export class TransportListPage extends TablePage<NotificationTransport> {
             }}
         >
             <button ?disabled=${disabled} slot="trigger" class="pf-c-button pf-m-danger">
-                ${t`Delete`}
+                ${msg("Delete")}
             </button>
         </ak-forms-delete-bulk>`;
     }
@@ -80,14 +82,22 @@ export class TransportListPage extends TablePage<NotificationTransport> {
             html`${item.name}`,
             html`${item.modeVerbose}`,
             html`<ak-forms-modal>
-                    <span slot="submit"> ${t`Update`} </span>
-                    <span slot="header"> ${t`Update Notification Transport`} </span>
+                    <span slot="submit"> ${msg("Update")} </span>
+                    <span slot="header"> ${msg("Update Notification Transport")} </span>
                     <ak-event-transport-form slot="form" .instancePk=${item.pk}>
                     </ak-event-transport-form>
                     <button slot="trigger" class="pf-c-button pf-m-plain">
-                        <i class="fas fa-edit"></i>
+                        <pf-tooltip position="top" content=${msg("Edit")}>
+                            <i class="fas fa-edit"></i>
+                        </pf-tooltip>
                     </button>
                 </ak-forms-modal>
+
+                <ak-rbac-object-permission-modal
+                    model=${RbacPermissionsAssignedByUsersListModelEnum.AuthentikEventsNotificationtransport}
+                    objectPk=${item.pk}
+                >
+                </ak-rbac-object-permission-modal>
                 <ak-action-button
                     class="pf-m-plain"
                     .apiRequest=${() => {
@@ -96,7 +106,9 @@ export class TransportListPage extends TablePage<NotificationTransport> {
                         });
                     }}
                 >
-                    <i class="fas fa-vial" aria-hidden="true"></i>
+                    <pf-tooltip position="top" content=${msg("Test")}>
+                        <i class="fas fa-vial" aria-hidden="true"></i>
+                    </pf-tooltip>
                 </ak-action-button>`,
         ];
     }
@@ -104,11 +116,17 @@ export class TransportListPage extends TablePage<NotificationTransport> {
     renderObjectCreate(): TemplateResult {
         return html`
             <ak-forms-modal>
-                <span slot="submit"> ${t`Create`} </span>
-                <span slot="header"> ${t`Create Notification Transport`} </span>
+                <span slot="submit"> ${msg("Create")} </span>
+                <span slot="header"> ${msg("Create Notification Transport")} </span>
                 <ak-event-transport-form slot="form"> </ak-event-transport-form>
-                <button slot="trigger" class="pf-c-button pf-m-primary">${t`Create`}</button>
+                <button slot="trigger" class="pf-c-button pf-m-primary">${msg("Create")}</button>
             </ak-forms-modal>
         `;
+    }
+}
+
+declare global {
+    interface HTMLElementTagNameMap {
+        "ak-event-transport-list": TransportListPage;
     }
 }

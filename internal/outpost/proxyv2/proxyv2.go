@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 
 	sentryhttp "github.com/getsentry/sentry-go/http"
@@ -65,16 +66,25 @@ func NewProxyServer(ac *ak.APIController) *ProxyServer {
 	globalMux.PathPrefix("/outpost.goauthentik.io/static").HandlerFunc(s.HandleStatic)
 	globalMux.Path("/outpost.goauthentik.io/ping").HandlerFunc(sentryutils.SentryNoSample(s.HandlePing))
 	rootMux.PathPrefix("/").HandlerFunc(s.Handle)
+	ac.AddWSHandler(s.handleWSMessage)
 	return s
 }
 
 func (ps *ProxyServer) HandleHost(rw http.ResponseWriter, r *http.Request) bool {
+	// Always handle requests for outpost paths that should answer regardless of hostname
+	if strings.HasPrefix(r.URL.Path, "/outpost.goauthentik.io/ping") ||
+		strings.HasPrefix(r.URL.Path, "/outpost.goauthentik.io/static") {
+		ps.mux.ServeHTTP(rw, r)
+		return true
+	}
+	// lookup app by hostname
 	a, _ := ps.lookupApp(r)
 	if a == nil {
 		return false
 	}
-	if a.HasQuerySignature(r) || a.Mode() == api.PROXYMODE_PROXY {
-		a.ServeHTTP(rw, r)
+	// check if the app should handle this URL, or is setup in proxy mode
+	if a.ShouldHandleURL(r) || a.Mode() == api.PROXYMODE_PROXY {
+		ps.mux.ServeHTTP(rw, r)
 		return true
 	}
 	return false
@@ -119,7 +129,7 @@ func (ps *ProxyServer) ServeHTTP() {
 		ps.log.WithField("listen", listenAddress).WithError(err).Warning("Failed to listen")
 		return
 	}
-	proxyListener := &proxyproto.Listener{Listener: listener}
+	proxyListener := &proxyproto.Listener{Listener: listener, ConnPolicy: utils.GetProxyConnectionPolicy()}
 	defer proxyListener.Close()
 
 	ps.log.WithField("listen", listenAddress).Info("Starting HTTP server")
@@ -138,7 +148,7 @@ func (ps *ProxyServer) ServeHTTPS() {
 		ps.log.WithError(err).Warning("Failed to listen (TLS)")
 		return
 	}
-	proxyListener := &proxyproto.Listener{Listener: web.TCPKeepAliveListener{TCPListener: ln.(*net.TCPListener)}}
+	proxyListener := &proxyproto.Listener{Listener: web.TCPKeepAliveListener{TCPListener: ln.(*net.TCPListener)}, ConnPolicy: utils.GetProxyConnectionPolicy()}
 	defer proxyListener.Close()
 
 	tlsListener := tls.NewListener(proxyListener, tlsConfig)

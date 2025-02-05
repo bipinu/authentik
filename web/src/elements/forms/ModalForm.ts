@@ -2,10 +2,10 @@ import { EVENT_REFRESH } from "@goauthentik/common/constants";
 import "@goauthentik/elements/LoadingOverlay";
 import { ModalButton } from "@goauthentik/elements/buttons/ModalButton";
 import "@goauthentik/elements/buttons/SpinnerButton";
+import { ModalHideEvent } from "@goauthentik/elements/controllers/ModalOrchestrationController.js";
 import { Form } from "@goauthentik/elements/forms/Form";
 
-import { t } from "@lingui/macro";
-
+import { msg } from "@lit/localize";
 import { TemplateResult, html } from "lit";
 import { customElement, property } from "lit/decorators.js";
 
@@ -21,31 +21,31 @@ export class ModalForm extends ModalButton {
     loading = false;
 
     @property({ type: String })
-    cancelText = t`Cancel`;
+    cancelText = msg("Cancel");
 
     async confirm(): Promise<void> {
         const form = this.querySelector<Form<unknown>>("[slot=form]");
         if (!form) {
-            return Promise.reject(t`No form found`);
+            return Promise.reject(msg("No form found"));
         }
         const formPromise = form.submit(new Event("submit"));
         if (!formPromise) {
-            return Promise.reject(t`Form didn't return a promise for submitting`);
+            return Promise.reject(msg("Form didn't return a promise for submitting"));
         }
         return formPromise
             .then(() => {
                 if (this.closeAfterSuccessfulSubmit) {
                     this.open = false;
                     form?.resetForm();
+                    this.dispatchEvent(
+                        new CustomEvent(EVENT_REFRESH, {
+                            bubbles: true,
+                            composed: true,
+                        }),
+                    );
                 }
                 this.loading = false;
                 this.locked = false;
-                this.dispatchEvent(
-                    new CustomEvent(EVENT_REFRESH, {
-                        bubbles: true,
-                        composed: true,
-                    }),
-                );
             })
             .catch((exc) => {
                 this.loading = false;
@@ -56,7 +56,7 @@ export class ModalForm extends ModalButton {
 
     renderModalInner(): TemplateResult {
         return html`${this.loading
-                ? html`<ak-loading-overlay ?topMost=${true}></ak-loading-overlay>`
+                ? html`<ak-loading-overlay topmost></ak-loading-overlay>`
                 : html``}
             <section class="pf-c-modal-box__header pf-c-page__main-section pf-m-light">
                 <div class="pf-c-content">
@@ -93,13 +93,18 @@ export class ModalForm extends ModalButton {
                     : html``}
                 <ak-spinner-button
                     .callAction=${async () => {
-                        this.resetForms();
-                        this.open = false;
+                        this.dispatchEvent(new ModalHideEvent(this));
                     }}
                     class="pf-m-secondary"
                 >
                     ${this.cancelText}
                 </ak-spinner-button>
             </footer>`;
+    }
+}
+
+declare global {
+    interface HTMLElementTagNameMap {
+        "ak-forms-modal": ModalForm;
     }
 }

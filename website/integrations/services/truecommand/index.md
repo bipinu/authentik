@@ -1,18 +1,17 @@
 ---
-title: TrueNAS TrueCommand
+title: Integrate with TrueNAS TrueCommand
+sidebar_label: TrueNAS TrueCommand
 ---
+
+# Integrate with TrueNAS TrueCommand
 
 <span class="badge badge--secondary">Support level: Community</span>
 
 ## What is TrueNAS TrueCommand
 
-From https://www.truenas.com/truecommand/
-:::note
-What is TrueCommand?
-TrueCommand is a ZFS-aware solution allowing you to set custom alerts on statistics like ARC usage or pool capacity and ensuring storage
-e uptime and future planning. TrueCommand also identifies and pinpoints errors on drives or vdevs (RAID groups), saving you valuable ti
-me when resolving issues.
-:::
+> TrueCommand is a ZFS-aware solution allowing you to set custom alerts on statistics like ARC usage or pool capacity and ensuring storage uptime and future planning. TrueCommand also identifies and pinpoints errors on drives or vdevs (RAID groups), saving you valuable time when resolving issues.
+>
+> -- https://www.truenas.com/truecommand/
 
 :::caution
 This setup assumes you will be using HTTPS as TrueCommand generates ACS and Redirect URLs based on the complete URL.
@@ -20,18 +19,22 @@ This setup assumes you will be using HTTPS as TrueCommand generates ACS and Redi
 
 ## Preparation
 
-The following placeholders will be used:
+The following placeholders are used in this guide:
 
--   `truecommand.company` is the FQDN of the snipe-it install.
--   `authentik.company` is the FQDN of the authentik install.
+- `truecommand.company` is the FQDN of the snipe-it installation.
+- `authentik.company` is the FQDN of the authentik installation.
+
+:::note
+This documentation lists only the settings that you need to change from their default values. Be aware that any changes other than those explicitly mentioned in this guide could cause issues accessing your application.
+:::
 
 Create an application in authentik and use the slug for later as `truenas-truecommand`.
 
 Create a SAML provider with the following parameters:
 
--   ACS URL: `https://truecommand.company/saml/acs`
--   Issuer: `truecommand-saml`
--   Binding: `Post`
+- ACS URL: `https://truecommand.company/saml/acs`
+- Issuer: `truecommand-saml`
+- Binding: `Post`
 
 Under _Advanced protocol settings_, set a certificate for _Signing Certificate_.
 Under _Advanced protocol settings_, set NameID Property to _authentik default SAML Mapping: Email_.
@@ -40,13 +43,13 @@ Under _Advanced protocol settings_, set NameID Property to _authentik default SA
 
 The following custom property mappings are required.
 
-Under _Customisation_, select _Property Mappings_, then _Create_. Select _SAML Property Mapping_.
+Under _Customization_, select _Property Mappings_, then _Create_. Select _SAML Property Mapping_.
 
 ### Username
 
--   Name: `Truecommand - Username`
--   SAML Attribute Name: `unique_name`
--   Expression
+- Name: `Truecommand - Username`
+- SAML Attribute Name: `unique_name`
+- Expression
 
 ```python
 return request.user.username
@@ -54,9 +57,9 @@ return request.user.username
 
 ### Email
 
--   Name: `Truecommand - Email`
--   SAML Attribute Name: `email`
--   Expression
+- Name: `Truecommand - Email`
+- SAML Attribute Name: `email`
+- Expression
 
 ```python
 return request.user.email
@@ -64,9 +67,9 @@ return request.user.email
 
 ### Fullname
 
--   Name: `Truecommand - Fullname`
--   SAML Attribute Name: `given_name` OR `display_name`
--   Expression
+- Name: `Truecommand - Fullname`
+- SAML Attribute Name: `given_name` OR `display_name`
+- Expression
 
 ```python
 return request.user.name
@@ -78,9 +81,9 @@ If you have custom attributes, or attributes imported from Active Directory, Tru
 
 #### Role
 
--   Name: `Truecommand - Role`
--   SAML Attribute Name: `title`
--   Expression
+- Name: `Truecommand - Role`
+- SAML Attribute Name: `title`
+- Expression
 
 ```python
 return [custom_attribute]
@@ -88,9 +91,9 @@ return [custom_attribute]
 
 #### Phone Number
 
--   Name: `Truecommand - Phone Number`
--   SAML Attribute Name: `telephone_number`
--   Expression
+- Name: `Truecommand - Phone Number`
+- SAML Attribute Name: `telephone_number`
+- Expression
 
 ```python
 return [custom_attribute]
@@ -106,12 +109,12 @@ Click the _Copy download URL_ to save the Metadata URL into your clipboard.
 
 ## TrueCommand Config
 
--   Click on the gear icon in the upper right corner.
--   Select Administration
--   Click on CONFIGURE
--   SAML Identity Provider URL: `Paste the Metadata URL from your clipboard.`
--   Click _Save_, then click _Configure_ again then select _Start the SAML service_, then click _Save_ to start the service.
+- Click on the gear icon in the upper right corner.
+- Select Administration
+- Click on CONFIGURE
+- SAML Identity Provider URL: `Paste the Metadata URL from your clipboard.`
+- Click _Save_, then click _Configure_ again then select _Start the SAML service_, then click _Save_ to start the service.
 
 ## Additional Resources
 
--   https://www.truenas.com/docs/truecommand/administration/settings/samlad/
+- https://www.truenas.com/docs/truecommand/administration/settings/samlad/

@@ -1,8 +1,11 @@
 """Prompt Stage Logic"""
+
+from collections.abc import Callable, Iterator
 from email.policy import Policy
 from types import MethodType
-from typing import Any, Callable, Iterator
+from typing import Any
 
+from django.contrib.messages import INFO, add_message
 from django.db.models.query import QuerySet
 from django.http import HttpRequest, HttpResponse
 from django.http.request import QueryDict
@@ -19,7 +22,7 @@ from rest_framework.serializers import ValidationError
 
 from authentik.core.api.utils import PassiveSerializer
 from authentik.core.models import User
-from authentik.flows.challenge import Challenge, ChallengeResponse, ChallengeTypes
+from authentik.flows.challenge import Challenge, ChallengeResponse
 from authentik.flows.planner import FlowPlan
 from authentik.flows.stage import ChallengeStageView
 from authentik.policies.engine import PolicyEngine
@@ -130,7 +133,7 @@ class PromptChallengeResponse(ChallengeResponse):
         password_fields: QuerySet[Prompt] = self.stage_instance.fields.filter(
             type=FieldTypes.PASSWORD
         )
-        if password_fields.exists() and password_fields.count() == 2:
+        if password_fields.exists() and password_fields.count() == 2:  # noqa: PLR2004
             self._validate_password_fields(*[field.field_key for field in password_fields])
 
         engine = ListPolicyEngine(
@@ -145,25 +148,32 @@ class PromptChallengeResponse(ChallengeResponse):
         result = engine.result
         if not result.passing:
             raise ValidationError(list(result.messages))
+        else:
+            for msg in result.messages:
+                add_message(self.request, INFO, msg)
         return attrs
 
 
-def username_field_validator_factory() -> Callable[[PromptChallenge, str], Any]:
+def username_field_validator_factory() -> Callable[[PromptChallengeResponse, str], Any]:
     """Return a `clean_` method for `field`. Clean method checks if username is taken already."""
 
-    def username_field_validator(self: PromptChallenge, value: str) -> Any:
+    def username_field_validator(self: PromptChallengeResponse, value: str) -> Any:
         """Check for duplicate usernames"""
-        if User.objects.filter(username=value).exists():
+        pending_user = self.stage.get_pending_user()
+        query = User.objects.all()
+        if pending_user.pk:
+            query = query.exclude(username=pending_user.username)
+        if query.filter(username=value).exists():
             raise ValidationError("Username is already taken.")
         return value
 
     return username_field_validator
 
 
-def password_single_validator_factory() -> Callable[[PromptChallenge, str], Any]:
+def password_single_validator_factory() -> Callable[[PromptChallengeResponse, str], Any]:
     """Return a `clean_` method for `field`. Clean method checks if username is taken already."""
 
-    def password_single_clean(self: PromptChallenge, value: str) -> Any:
+    def password_single_clean(self: PromptChallengeResponse, value: str) -> Any:
         """Send password validation signals for e.g. LDAP Source"""
         password_validate.send(sender=self, password=value, plan_context=self.plan.context)
         return value
@@ -179,7 +189,7 @@ class ListPolicyEngine(PolicyEngine):
         self.__list = policies
         self.use_cache = False
 
-    def _iter_bindings(self) -> Iterator[PolicyBinding]:
+    def iterate_bindings(self) -> Iterator[PolicyBinding]:
         for policy in self.__list:
             yield PolicyBinding(
                 policy=policy,
@@ -221,7 +231,6 @@ class PromptStageView(ChallengeStageView):
         serializers = self.get_prompt_challenge_fields(fields, context_prompt)
         challenge = PromptChallenge(
             data={
-                "type": ChallengeTypes.NATIVE.value,
                 "fields": serializers,
             },
         )

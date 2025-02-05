@@ -1,5 +1,6 @@
 """Mailcow OAuth Views"""
-from typing import Any, Optional
+
+from typing import Any
 
 from requests.exceptions import RequestException
 from structlog.stdlib import get_logger
@@ -24,10 +25,10 @@ class MailcowOAuthRedirect(OAuthRedirect):
 class MailcowOAuth2Client(OAuth2Client):
     """MailcowOAuth2Client, for some reason, mailcow does not like the default headers"""
 
-    def get_profile_info(self, token: dict[str, str]) -> Optional[dict[str, Any]]:
+    def get_profile_info(self, token: dict[str, str]) -> dict[str, Any] | None:
         "Fetch user profile information."
-        profile_url = self.source.type.profile_url or ""
-        if self.source.type.urls_customizable and self.source.profile_url:
+        profile_url = self.source.source_type.profile_url or ""
+        if self.source.source_type.urls_customizable and self.source.profile_url:
             profile_url = self.source.profile_url
         response = self.session.request(
             "get",
@@ -46,16 +47,6 @@ class MailcowOAuth2Callback(OAuthCallback):
 
     client_class = MailcowOAuth2Client
 
-    def get_user_enroll_context(
-        self,
-        info: dict[str, Any],
-    ) -> dict[str, Any]:
-        return {
-            "username": info.get("full_name"),
-            "email": info.get("email"),
-            "name": info.get("full_name"),
-        }
-
 
 @registry.register()
 class MailcowType(SourceType):
@@ -63,7 +54,14 @@ class MailcowType(SourceType):
 
     callback_view = MailcowOAuth2Callback
     redirect_view = MailcowOAuthRedirect
-    name = "Mailcow"
-    slug = "mailcow"
+    verbose_name = "Mailcow"
+    name = "mailcow"
 
     urls_customizable = True
+
+    def get_base_user_properties(self, info: dict[str, Any], **kwargs) -> dict[str, Any]:
+        return {
+            "username": info.get("full_name"),
+            "email": info.get("email"),
+            "name": info.get("full_name"),
+        }

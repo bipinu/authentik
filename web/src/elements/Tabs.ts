@@ -2,8 +2,7 @@ import { CURRENT_CLASS, EVENT_REFRESH, ROUTE_SEPARATOR } from "@goauthentik/comm
 import { AKElement } from "@goauthentik/elements/Base";
 import { getURLParams, updateURLParams } from "@goauthentik/elements/router/RouteMatch";
 
-import { t } from "@lingui/macro";
-
+import { msg } from "@lit/localize";
 import { CSSResult, TemplateResult, css, html } from "lit";
 import { customElement, property } from "lit/decorators.js";
 import { ifDefined } from "lit/directives/if-defined.js";
@@ -38,6 +37,9 @@ export class Tabs extends AKElement {
                 }
                 :host([vertical]) .pf-c-tabs__list {
                     height: 100%;
+                }
+                :host([vertical]) .pf-c-tabs .pf-c-tabs__list::before {
+                    border-color: transparent;
                 }
             `,
         ];
@@ -90,16 +92,18 @@ export class Tabs extends AKElement {
         const pages = Array.from(this.querySelectorAll(":scope > [slot^='page-']"));
         if (window.location.hash.includes(ROUTE_SEPARATOR)) {
             const params = getURLParams();
-            if (this.pageIdentifier in params && !this.currentPage) {
-                if (this.querySelector(`[slot='${params[this.pageIdentifier]}']`) !== null) {
-                    // To update the URL to match with the current slot
-                    this.onClick(params[this.pageIdentifier] as string);
-                }
+            if (
+                this.pageIdentifier in params &&
+                !this.currentPage &&
+                this.querySelector(`[slot='${params[this.pageIdentifier]}']`) !== null
+            ) {
+                // To update the URL to match with the current slot
+                this.onClick(params[this.pageIdentifier] as string);
             }
         }
         if (!this.currentPage) {
             if (pages.length < 1) {
-                return html`<h1>${t`no tabs defined`}</h1>`;
+                return html`<h1>${msg("no tabs defined")}</h1>`;
             }
             const wantedPage = pages[0].attributes.getNamedItem("slot")?.value;
             this.onClick(wantedPage);
@@ -111,5 +115,11 @@ export class Tabs extends AKElement {
             </div>
             <slot name="header"></slot>
             <slot name="${ifDefined(this.currentPage)}"></slot>`;
+    }
+}
+
+declare global {
+    interface HTMLElementTagNameMap {
+        "ak-tabs": Tabs;
     }
 }

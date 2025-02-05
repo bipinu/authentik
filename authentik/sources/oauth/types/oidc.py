@@ -1,4 +1,5 @@
 """OpenID Connect OAuth Views"""
+
 from typing import Any
 
 from authentik.sources.oauth.clients.oauth2 import UserprofileHeaderAuthClient
@@ -20,20 +21,10 @@ class OpenIDConnectOAuthRedirect(OAuthRedirect):
 class OpenIDConnectOAuth2Callback(OAuthCallback):
     """OpenIDConnect OAuth2 Callback"""
 
-    client_class: UserprofileHeaderAuthClient
+    client_class = UserprofileHeaderAuthClient
 
     def get_user_id(self, info: dict[str, str]) -> str:
-        return info.get("sub", "")
-
-    def get_user_enroll_context(
-        self,
-        info: dict[str, Any],
-    ) -> dict[str, Any]:
-        return {
-            "username": info.get("nickname", info.get("preferred_username")),
-            "email": info.get("email"),
-            "name": info.get("name"),
-        }
+        return info.get("sub", None)
 
 
 @registry.register()
@@ -42,7 +33,15 @@ class OpenIDConnectType(SourceType):
 
     callback_view = OpenIDConnectOAuth2Callback
     redirect_view = OpenIDConnectOAuthRedirect
-    name = "OpenID Connect"
-    slug = "openidconnect"
+    verbose_name = "OpenID Connect"
+    name = "openidconnect"
 
     urls_customizable = True
+
+    def get_base_user_properties(self, info: dict[str, Any], **kwargs) -> dict[str, Any]:
+        return {
+            "username": info.get("nickname", info.get("preferred_username")),
+            "email": info.get("email"),
+            "name": info.get("name"),
+            "groups": info.get("groups", []),
+        }

@@ -1,6 +1,7 @@
+import "@goauthentik/admin/rbac/ObjectPermissionModal";
 import "@goauthentik/admin/stages/prompt/PromptForm";
 import { DEFAULT_CONFIG } from "@goauthentik/common/api/config";
-import { uiConfig } from "@goauthentik/common/ui/config";
+import { PFSize } from "@goauthentik/common/enums";
 import "@goauthentik/elements/buttons/ModalButton";
 import "@goauthentik/elements/buttons/SpinnerButton";
 import "@goauthentik/elements/forms/DeleteBulkForm";
@@ -8,13 +9,13 @@ import "@goauthentik/elements/forms/ModalForm";
 import { PaginatedResponse } from "@goauthentik/elements/table/Table";
 import { TableColumn } from "@goauthentik/elements/table/Table";
 import { TablePage } from "@goauthentik/elements/table/TablePage";
+import "@patternfly/elements/pf-tooltip/pf-tooltip.js";
 
-import { t } from "@lingui/macro";
-
+import { msg } from "@lit/localize";
 import { TemplateResult, html } from "lit";
 import { customElement, property } from "lit/decorators.js";
 
-import { Prompt, StagesApi } from "@goauthentik/api";
+import { Prompt, RbacPermissionsAssignedByUsersListModelEnum, StagesApi } from "@goauthentik/api";
 
 @customElement("ak-stage-prompt-list")
 export class PromptListPage extends TablePage<Prompt> {
@@ -22,44 +23,42 @@ export class PromptListPage extends TablePage<Prompt> {
         return true;
     }
     pageTitle(): string {
-        return t`Prompts`;
+        return msg("Prompts");
     }
     pageDescription(): string {
-        return t`Single Prompts that can be used for Prompt Stages.`;
+        return msg("Single Prompts that can be used for Prompt Stages.");
     }
     pageIcon(): string {
         return "pf-icon pf-icon-plugged";
     }
 
     checkbox = true;
+    clearOnRefresh = true;
 
     @property()
     order = "name";
 
-    async apiEndpoint(page: number): Promise<PaginatedResponse<Prompt>> {
-        return new StagesApi(DEFAULT_CONFIG).stagesPromptPromptsList({
-            ordering: this.order,
-            page: page,
-            pageSize: (await uiConfig()).pagination.perPage,
-            search: this.search || "",
-        });
+    async apiEndpoint(): Promise<PaginatedResponse<Prompt>> {
+        return new StagesApi(DEFAULT_CONFIG).stagesPromptPromptsList(
+            await this.defaultEndpointConfig(),
+        );
     }
 
     columns(): TableColumn[] {
         return [
-            new TableColumn(t`Name`, "name"),
-            new TableColumn(t`Field`, "field_key"),
-            new TableColumn(t`Type`, "type"),
-            new TableColumn(t`Order`, "order"),
-            new TableColumn(t`Stages`),
-            new TableColumn(t`Actions`),
+            new TableColumn(msg("Name"), "name"),
+            new TableColumn(msg("Field"), "field_key"),
+            new TableColumn(msg("Type"), "type"),
+            new TableColumn(msg("Order"), "order"),
+            new TableColumn(msg("Stages")),
+            new TableColumn(msg("Actions")),
         ];
     }
 
     renderToolbarSelected(): TemplateResult {
         const disabled = this.selectedElements.length < 1;
         return html`<ak-forms-delete-bulk
-            objectLabel=${t`Prompt(s)`}
+            objectLabel=${msg("Prompt(s)")}
             .objects=${this.selectedElements}
             .usedBy=${(item: Prompt) => {
                 return new StagesApi(DEFAULT_CONFIG).stagesPromptPromptsUsedByList({
@@ -73,7 +72,7 @@ export class PromptListPage extends TablePage<Prompt> {
             }}
         >
             <button ?disabled=${disabled} slot="trigger" class="pf-c-button pf-m-danger">
-                ${t`Delete`}
+                ${msg("Delete")}
             </button>
         </ak-forms-delete-bulk>`;
     }
@@ -87,25 +86,38 @@ export class PromptListPage extends TablePage<Prompt> {
             html`${item.promptstageSet?.map((stage) => {
                 return html`<li>${stage.name}</li>`;
             })}`,
-            html`<ak-forms-modal>
-                <span slot="submit"> ${t`Update`} </span>
-                <span slot="header"> ${t`Update Prompt`} </span>
-                <ak-prompt-form slot="form" .instancePk=${item.pk}> </ak-prompt-form>
-                <button slot="trigger" class="pf-c-button pf-m-plain">
-                    <i class="fas fa-edit"></i>
-                </button>
-            </ak-forms-modal>`,
+            html`<ak-forms-modal size=${PFSize.XLarge}>
+                    <span slot="submit"> ${msg("Update")} </span>
+                    <span slot="header"> ${msg("Update Prompt")} </span>
+                    <ak-prompt-form slot="form" .instancePk=${item.pk}> </ak-prompt-form>
+                    <button slot="trigger" class="pf-c-button pf-m-plain">
+                        <pf-tooltip position="top" content=${msg("Edit")}>
+                            <i class="fas fa-edit"></i>
+                        </pf-tooltip>
+                    </button>
+                </ak-forms-modal>
+                <ak-rbac-object-permission-modal
+                    model=${RbacPermissionsAssignedByUsersListModelEnum.AuthentikStagesPromptPrompt}
+                    objectPk=${item.pk}
+                >
+                </ak-rbac-object-permission-modal> `,
         ];
     }
 
     renderObjectCreate(): TemplateResult {
         return html`
-            <ak-forms-modal>
-                <span slot="submit"> ${t`Create`} </span>
-                <span slot="header"> ${t`Create Prompt`} </span>
+            <ak-forms-modal size=${PFSize.XLarge}>
+                <span slot="submit"> ${msg("Create")} </span>
+                <span slot="header"> ${msg("Create Prompt")} </span>
                 <ak-prompt-form slot="form"> </ak-prompt-form>
-                <button slot="trigger" class="pf-c-button pf-m-primary">${t`Create`}</button>
+                <button slot="trigger" class="pf-c-button pf-m-primary">${msg("Create")}</button>
             </ak-forms-modal>
         `;
+    }
+}
+
+declare global {
+    interface HTMLElementTagNameMap {
+        "ak-stage-prompt-list": PromptListPage;
     }
 }

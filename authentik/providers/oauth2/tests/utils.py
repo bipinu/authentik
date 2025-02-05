@@ -1,7 +1,10 @@
 """OAuth test helpers"""
+
 from typing import Any
 
 from django.test import TestCase
+from jwcrypto.jwe import JWE
+from jwcrypto.jwk import JWK
 from jwt import decode
 
 from authentik.core.tests.utils import create_test_cert
@@ -25,12 +28,20 @@ class OAuthTestCase(TestCase):
     def setUpClass(cls) -> None:
         cls.keypair = create_test_cert()
         super().setUpClass()
-        cls.maxDiff = None
 
     def assert_non_none_or_unset(self, container: dict, key: str):
         """Check that a key, if set, is not none"""
         if key in container:
             self.assertIsNotNone(container[key])
+
+    def validate_jwe(self, token: AccessToken, provider: OAuth2Provider) -> dict[str, Any]:
+        """Validate JWEs"""
+        private_key = JWK.from_pem(provider.encryption_key.key_data.encode())
+
+        jwetoken = JWE()
+        jwetoken.deserialize(token.token, key=private_key)
+        token.token = jwetoken.payload.decode()
+        return self.validate_jwt(token, provider)
 
     def validate_jwt(self, token: AccessToken, provider: OAuth2Provider) -> dict[str, Any]:
         """Validate that all required fields are set"""

@@ -2,6 +2,7 @@ package radius
 
 import (
 	"crypto/sha512"
+	"time"
 
 	"github.com/getsentry/sentry-go"
 	"github.com/google/uuid"
@@ -35,7 +36,7 @@ func (r *RadiusRequest) ID() string {
 
 func (rs *RadiusServer) ServeRADIUS(w radius.ResponseWriter, r *radius.Request) {
 	span := sentry.StartSpan(r.Context(), "authentik.providers.radius.connect",
-		sentry.TransactionName("authentik.providers.radius.connect"))
+		sentry.WithTransactionName("authentik.providers.radius.connect"))
 	rid := uuid.New().String()
 	span.SetTag("request_uid", rid)
 	rl := rs.log.WithField("code", r.Code.String()).WithField("request", rid)
@@ -45,7 +46,7 @@ func (rs *RadiusServer) ServeRADIUS(w radius.ResponseWriter, r *radius.Request) 
 		metrics.Requests.With(prometheus.Labels{
 			"outpost_name": rs.ac.Outpost.Name,
 			"app":          selectedApp,
-		}).Observe(float64(span.EndTime.Sub(span.StartTime)))
+		}).Observe(float64(span.EndTime.Sub(span.StartTime)) / float64(time.Second))
 	}()
 
 	nr := &RadiusRequest{

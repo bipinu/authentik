@@ -3,8 +3,7 @@ import "@goauthentik/elements/forms/FormElement";
 import "@goauthentik/flow/FormStatic";
 import { BaseStage } from "@goauthentik/flow/stages/base";
 
-import { t } from "@lingui/macro";
-
+import { msg } from "@lit/localize";
 import { CSSResult, TemplateResult, html } from "lit";
 import { customElement } from "lit/decorators.js";
 
@@ -31,7 +30,7 @@ export class OAuth2DeviceCode extends BaseStage<
 
     render(): TemplateResult {
         if (!this.challenge) {
-            return html`<ak-empty-state ?loading="${true}" header=${t`Loading`}> </ak-empty-state>`;
+            return html`<ak-empty-state loading> </ak-empty-state>`;
         }
         return html`<header class="pf-c-login__main-header">
                 <h1 class="pf-c-title pf-m-3xl">${this.challenge.flowInfo?.title}</h1>
@@ -43,10 +42,10 @@ export class OAuth2DeviceCode extends BaseStage<
                         this.submitForm(e);
                     }}
                 >
-                    <p>${t`Enter the code shown on your device.`}</p>
+                    <p>${msg("Enter the code shown on your device.")}</p>
                     <ak-form-element
-                        label="${t`Code`}"
-                        ?required="${true}"
+                        label="${msg("Code")}"
+                        required
                         class="pf-c-form__group"
                         .errors=${(this.challenge?.responseErrors || {})["code"]}
                     >
@@ -55,7 +54,7 @@ export class OAuth2DeviceCode extends BaseStage<
                             name="code"
                             inputmode="numeric"
                             pattern="[0-9]*"
-                            placeholder="${t`Please enter your Code`}"
+                            placeholder="${msg("Please enter your Code")}"
                             autofocus=""
                             autocomplete="off"
                             class="pf-c-form-control"
@@ -66,7 +65,7 @@ export class OAuth2DeviceCode extends BaseStage<
 
                     <div class="pf-c-form__group pf-m-action">
                         <button type="submit" class="pf-c-button pf-m-primary pf-m-block">
-                            ${t`Continue`}
+                            ${msg("Continue")}
                         </button>
                     </div>
                 </form>
@@ -74,5 +73,11 @@ export class OAuth2DeviceCode extends BaseStage<
             <footer class="pf-c-login__main-footer">
                 <ul class="pf-c-login__main-footer-links"></ul>
             </footer>`;
+    }
+}
+
+declare global {
+    interface HTMLElementTagNameMap {
+        "ak-flow-provider-oauth2-code": OAuth2DeviceCode;
     }
 }

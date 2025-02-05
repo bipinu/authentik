@@ -1,47 +1,42 @@
 import "@goauthentik/admin/events/RuleForm";
 import "@goauthentik/admin/policies/BoundPoliciesList";
+import "@goauthentik/admin/rbac/ObjectPermissionModal";
 import { DEFAULT_CONFIG } from "@goauthentik/common/api/config";
-import { uiConfig } from "@goauthentik/common/ui/config";
+import { severityToLabel } from "@goauthentik/common/labels";
 import "@goauthentik/elements/buttons/SpinnerButton";
 import "@goauthentik/elements/forms/DeleteBulkForm";
 import "@goauthentik/elements/forms/ModalForm";
 import { PaginatedResponse } from "@goauthentik/elements/table/Table";
 import { TableColumn } from "@goauthentik/elements/table/Table";
 import { TablePage } from "@goauthentik/elements/table/TablePage";
+import "@patternfly/elements/pf-tooltip/pf-tooltip.js";
 
-import { t } from "@lingui/macro";
-
+import { msg } from "@lit/localize";
 import { TemplateResult, html } from "lit";
 import { customElement, property } from "lit/decorators.js";
 
-import { EventsApi, NotificationRule, SeverityEnum } from "@goauthentik/api";
-
-export function SeverityToLabel(severity: SeverityEnum | null | undefined): string {
-    if (!severity) return t`Unknown severity`;
-    switch (severity) {
-        case SeverityEnum.Alert:
-            return t`Alert`;
-        case SeverityEnum.Notice:
-            return t`Notice`;
-        case SeverityEnum.Warning:
-            return t`Warning`;
-    }
-    return t`Unknown severity`;
-}
+import {
+    EventsApi,
+    NotificationRule,
+    RbacPermissionsAssignedByUsersListModelEnum,
+} from "@goauthentik/api";
 
 @customElement("ak-event-rule-list")
 export class RuleListPage extends TablePage<NotificationRule> {
     expandable = true;
     checkbox = true;
+    clearOnRefresh = true;
 
     searchEnabled(): boolean {
         return true;
     }
     pageTitle(): string {
-        return t`Notification Rules`;
+        return msg("Notification Rules");
     }
     pageDescription(): string {
-        return t`Send notifications whenever a specific Event is created and matched by policies.`;
+        return msg(
+            "Send notifications whenever a specific Event is created and matched by policies.",
+        );
     }
     pageIcon(): string {
         return "pf-icon pf-icon-attention-bell";
@@ -50,28 +45,23 @@ export class RuleListPage extends TablePage<NotificationRule> {
     @property()
     order = "name";
 
-    async apiEndpoint(page: number): Promise<PaginatedResponse<NotificationRule>> {
-        return new EventsApi(DEFAULT_CONFIG).eventsRulesList({
-            ordering: this.order,
-            page: page,
-            pageSize: (await uiConfig()).pagination.perPage,
-            search: this.search || "",
-        });
+    async apiEndpoint(): Promise<PaginatedResponse<NotificationRule>> {
+        return new EventsApi(DEFAULT_CONFIG).eventsRulesList(await this.defaultEndpointConfig());
     }
 
     columns(): TableColumn[] {
         return [
-            new TableColumn(t`Name`, "name"),
-            new TableColumn(t`Severity`, "severity"),
-            new TableColumn(t`Sent to group`, "group"),
-            new TableColumn(t`Actions`),
+            new TableColumn(msg("Name"), "name"),
+            new TableColumn(msg("Severity"), "severity"),
+            new TableColumn(msg("Sent to group"), "group"),
+            new TableColumn(msg("Actions")),
         ];
     }
 
     renderToolbarSelected(): TemplateResult {
         const disabled = this.selectedElements.length < 1;
         return html`<ak-forms-delete-bulk
-            objectLabel=${t`Notification rule(s)`}
+            objectLabel=${msg("Notification rule(s)")}
             .objects=${this.selectedElements}
             .usedBy=${(item: NotificationRule) => {
                 return new EventsApi(DEFAULT_CONFIG).eventsRulesUsedByList({
@@ -85,7 +75,7 @@ export class RuleListPage extends TablePage<NotificationRule> {
             }}
         >
             <button ?disabled=${disabled} slot="trigger" class="pf-c-button pf-m-danger">
-                ${t`Delete`}
+                ${msg("Delete")}
             </button>
         </ak-forms-delete-bulk>`;
     }
@@ -93,28 +83,36 @@ export class RuleListPage extends TablePage<NotificationRule> {
     row(item: NotificationRule): TemplateResult[] {
         return [
             html`${item.name}`,
-            html`${SeverityToLabel(item.severity)}`,
+            html`${severityToLabel(item.severity)}`,
             html`${item.groupObj
                 ? html`<a href="#/identity/groups/${item.groupObj.pk}">${item.groupObj.name}</a>`
-                : t`None (rule disabled)`}`,
+                : msg("None (rule disabled)")}`,
             html`<ak-forms-modal>
-                <span slot="submit"> ${t`Update`} </span>
-                <span slot="header"> ${t`Update Notification Rule`} </span>
-                <ak-event-rule-form slot="form" .instancePk=${item.pk}> </ak-event-rule-form>
-                <button slot="trigger" class="pf-c-button pf-m-plain">
-                    <i class="fas fa-edit"></i>
-                </button>
-            </ak-forms-modal>`,
+                    <span slot="submit"> ${msg("Update")} </span>
+                    <span slot="header"> ${msg("Update Notification Rule")} </span>
+                    <ak-event-rule-form slot="form" .instancePk=${item.pk}> </ak-event-rule-form>
+                    <button slot="trigger" class="pf-c-button pf-m-plain">
+                        <pf-tooltip position="top" content=${msg("Edit")}>
+                            <i class="fas fa-edit"></i>
+                        </pf-tooltip>
+                    </button>
+                </ak-forms-modal>
+
+                <ak-rbac-object-permission-modal
+                    model=${RbacPermissionsAssignedByUsersListModelEnum.AuthentikEventsNotificationrule}
+                    objectPk=${item.pk}
+                >
+                </ak-rbac-object-permission-modal>`,
         ];
     }
 
     renderObjectCreate(): TemplateResult {
         return html`
             <ak-forms-modal>
-                <span slot="submit"> ${t`Create`} </span>
-                <span slot="header"> ${t`Create Notification Rule`} </span>
+                <span slot="submit"> ${msg("Create")} </span>
+                <span slot="header"> ${msg("Create Notification Rule")} </span>
                 <ak-event-rule-form slot="form"> </ak-event-rule-form>
-                <button slot="trigger" class="pf-c-button pf-m-primary">${t`Create`}</button>
+                <button slot="trigger" class="pf-c-button pf-m-primary">${msg("Create")}</button>
             </ak-forms-modal>
         `;
     }
@@ -123,11 +121,19 @@ export class RuleListPage extends TablePage<NotificationRule> {
         return html` <td role="cell" colspan="4">
             <div class="pf-c-table__expandable-row-content">
                 <p>
-                    ${t`These bindings control upon which events this rule triggers. Bindings to
-                groups/users are checked against the user of the event.`}
+                    ${msg(
+                        `These bindings control upon which events this rule triggers.
+Bindings to groups/users are checked against the user of the event.`,
+                    )}
                 </p>
                 <ak-bound-policies-list .target=${item.pk}> </ak-bound-policies-list>
             </div>
         </td>`;
+    }
+}
+
+declare global {
+    interface HTMLElementTagNameMap {
+        "ak-event-rule-list": RuleListPage;
     }
 }

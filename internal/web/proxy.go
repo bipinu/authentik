@@ -2,22 +2,26 @@ package web
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httputil"
-	"net/url"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"goauthentik.io/internal/config"
 	"goauthentik.io/internal/utils/sentry"
+)
+
+var (
+	ErrAuthentikStarting = errors.New("authentik starting")
 )
 
 func (ws *WebServer) configureProxy() {
 	// Reverse proxy to the application server
-	u, _ := url.Parse("http://localhost:8000")
 	director := func(req *http.Request) {
-		req.URL.Scheme = u.Scheme
-		req.URL.Host = u.Host
+		req.URL.Scheme = ws.upstreamURL.Scheme
+		req.URL.Host = ws.upstreamURL.Host
 		if _, ok := req.Header["User-Agent"]; !ok {
 			// explicitly disable User-Agent so it's not set to default value
 			req.Header.Set("User-Agent", "")
@@ -27,60 +31,51 @@ func (ws *WebServer) configureProxy() {
 		}
 		ws.log.WithField("url", req.URL.String()).WithField("headers", req.Header).Trace("tracing request to backend")
 	}
-	rp := &httputil.ReverseProxy{Director: director}
+	rp := &httputil.ReverseProxy{
+		Director:  director,
+		Transport: ws.upstreamHttpClient().Transport,
+	}
 	rp.ErrorHandler = ws.proxyErrorHandler
 	rp.ModifyResponse = ws.proxyModifyResponse
-	ws.m.PathPrefix("/outpost.goauthentik.io").HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
-		if ws.ProxyServer != nil {
-			before := time.Now()
-			ws.ProxyServer.Handle(rw, r)
-			Requests.With(prometheus.Labels{
-				"dest": "embedded_outpost",
-			}).Observe(float64(time.Since(before)))
-			return
-		}
-		ws.proxyErrorHandler(rw, r, fmt.Errorf("proxy not running"))
-	})
-	ws.m.Path("/-/health/live/").HandlerFunc(sentry.SentryNoSample(func(rw http.ResponseWriter, r *http.Request) {
-		rw.WriteHeader(204)
+	ws.mainRouter.PathPrefix(config.Get().Web.Path).Path("/-/health/live/").HandlerFunc(sentry.SentryNoSample(func(rw http.ResponseWriter, r *http.Request) {
+		rw.WriteHeader(200)
 	}))
-	ws.m.PathPrefix("/").HandlerFunc(sentry.SentryNoSample(func(rw http.ResponseWriter, r *http.Request) {
-		if !ws.p.IsRunning() {
-			ws.proxyErrorHandler(rw, r, fmt.Errorf("authentik core not running yet"))
+	ws.mainRouter.PathPrefix(config.Get().Web.Path).HandlerFunc(sentry.SentryNoSample(func(rw http.ResponseWriter, r *http.Request) {
+		if !ws.g.IsRunning() {
+			ws.proxyErrorHandler(rw, r, ErrAuthentikStarting)
 			return
 		}
 		before := time.Now()
-		if ws.ProxyServer != nil {
-			if ws.ProxyServer.HandleHost(rw, r) {
-				Requests.With(prometheus.Labels{
-					"dest": "embedded_outpost",
-				}).Observe(float64(time.Since(before)))
-				return
-			}
+		if ws.ProxyServer != nil && ws.ProxyServer.HandleHost(rw, r) {
+			elapsed := time.Since(before)
+			Requests.With(prometheus.Labels{
+				"dest": "embedded_outpost",
+			}).Observe(float64(elapsed) / float64(time.Second))
+			return
 		}
+		elapsed := time.Since(before)
 		Requests.With(prometheus.Labels{
 			"dest": "core",
-		}).Observe(float64(time.Since(before)))
+		}).Observe(float64(elapsed) / float64(time.Second))
 		r.Body = http.MaxBytesReader(rw, r.Body, 32*1024*1024)
 		rp.ServeHTTP(rw, r)
 	}))
 }
 
 func (ws *WebServer) proxyErrorHandler(rw http.ResponseWriter, req *http.Request, err error) {
-	ws.log.WithError(err).Warning("failed to proxy to backend")
+	if !errors.Is(err, ErrAuthentikStarting) {
+		ws.log.WithError(err).Warning("failed to proxy to backend")
+	}
 	rw.WriteHeader(http.StatusBadGateway)
 	em := fmt.Sprintf("failed to connect to authentik backend: %v", err)
-	if !ws.p.IsRunning() {
-		em = "authentik starting..."
-	}
 	// return json if the client asks for json
 	if req.Header.Get("Accept") == "application/json" {
-		eem, _ := json.Marshal(map[string]string{
+		err = json.NewEncoder(rw).Encode(map[string]string{
 			"error": em,
 		})
-		em = string(eem)
+	} else {
+		_, err = rw.Write([]byte(em))
 	}
-	_, err = rw.Write([]byte(em))
 	if err != nil {
 		ws.log.WithError(err).Warning("failed to write error message")
 	}
