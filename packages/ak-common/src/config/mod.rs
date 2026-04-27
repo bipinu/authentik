@@ -78,7 +78,9 @@ impl Config {
         builder = builder.add_source(
             config_rs::Environment::with_prefix("AUTHENTIK")
                 .prefix_separator("_")
-                .separator("__"),
+                .separator("__")
+                .try_parsing(true)
+                .list_separator(","),
         );
         if let Some(overrides) = overrides {
             builder = builder.add_source(config_rs::File::from_str(
@@ -454,5 +456,80 @@ mod tests {
         assert_eq!(super::get().secret_key, String::new());
         super::set(json!({"secret_key": "my_new_secret_key"})).expect("failed to set config");
         assert_eq!(super::get().secret_key, "my_new_secret_key");
+    }
+
+    #[test]
+    fn env_bool_true() {
+        #[expect(unsafe_code, reason = "testing")]
+        // SAFETY: testing
+        unsafe {
+            env::set_var("AUTHENTIK_DEBUG", "true");
+        }
+
+        let (config, _) = super::Config::load(&[], None).expect("failed to load config");
+
+        assert!(config.debug);
+    }
+
+    #[test]
+    fn env_bool_false() {
+        #[expect(unsafe_code, reason = "testing")]
+        // SAFETY: testing
+        unsafe {
+            env::set_var("AUTHENTIK_DEBUG", "false");
+        }
+
+        let (config, _) = super::Config::load(&[], None).expect("failed to load config");
+
+        assert!(!config.debug);
+    }
+
+    // See https://github.com/rust-cli/config-rs/issues/443
+    // #[test]
+    // fn env_list_empty() {
+    //     #[expect(unsafe_code, reason = "testing")]
+    //     // SAFETY: testing
+    //     unsafe {
+    //         env::set_var("AUTHENTIK_LISTEN__HTTP", "");
+    //     }
+    //
+    //     let (config, _) = super::Config::load(&[], None).expect("failed to load config");
+    //
+    //     assert_eq!(config.listen.http, []);
+    // }
+
+    #[test]
+    fn env_list_one_element() {
+        #[expect(unsafe_code, reason = "testing")]
+        // SAFETY: testing
+        unsafe {
+            env::set_var("AUTHENTIK_LISTEN__HTTP", "[::1]:9000");
+        }
+
+        let (config, _) = super::Config::load(&[], None).expect("failed to load config");
+
+        assert_eq!(
+            config.listen.http,
+            ["[::1]:9000".parse().expect("infallible")]
+        );
+    }
+
+    #[test]
+    fn env_list_many_elements() {
+        #[expect(unsafe_code, reason = "testing")]
+        // SAFETY: testing
+        unsafe {
+            env::set_var("AUTHENTIK_LISTEN__HTTP", "[::1]:9000,[::1]:9001");
+        }
+
+        let (config, _) = super::Config::load(&[], None).expect("failed to load config");
+
+        assert_eq!(
+            config.listen.http,
+            [
+                "[::1]:9000".parse().expect("infallible"),
+                "[::1]:9001".parse().expect("infallible")
+            ]
+        );
     }
 }
