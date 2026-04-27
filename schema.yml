@@ -39976,6 +39976,16 @@ components:
       - google_id
       - provider
       - user
+    GrantTypesEnum:
+      enum:
+      - authorization_code
+      - implicit
+      - hybrid
+      - refresh_token
+      - client_credentials
+      - password
+      - urn:ietf:params:oauth:grant-type:device_code
+      type: string
     Group:
       type: object
       description: Group Serializer
@@ -43635,6 +43645,10 @@ components:
           - $ref: '#/components/schemas/ClientTypeEnum'
           description: Confidential clients are capable of maintaining the confidentiality
             of their credentials. Public clients are incapable
+        grant_types:
+          type: array
+          items:
+            $ref: '#/components/schemas/GrantTypesEnum'
         client_id:
           type: string
           maxLength: 255
@@ -43756,6 +43770,10 @@ components:
           - $ref: '#/components/schemas/ClientTypeEnum'
           description: Confidential clients are capable of maintaining the confidentiality
             of their credentials. Public clients are incapable
+        grant_types:
+          type: array
+          items:
+            $ref: '#/components/schemas/GrantTypesEnum'
         client_id:
           type: string
           minLength: 1
@@ -49323,6 +49341,10 @@ components:
           - $ref: '#/components/schemas/ClientTypeEnum'
           description: Confidential clients are capable of maintaining the confidentiality
             of their credentials. Public clients are incapable
+        grant_types:
+          type: array
+          items:
+            $ref: '#/components/schemas/GrantTypesEnum'
         client_id:
           type: string
           minLength: 1
