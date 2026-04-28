@@ -34111,6 +34111,9 @@ components:
           $ref: '#/components/schemas/PolicyEngineMode'
         group:
           type: string
+        meta_hide:
+          type: boolean
+          description: Hide this application from the user's My applications page.
       required:
       - backchannel_providers_obj
       - launch_url
@@ -34192,6 +34195,9 @@ components:
           $ref: '#/components/schemas/PolicyEngineMode'
         group:
           type: string
+        meta_hide:
+          type: boolean
+          description: Hide this application from the user's My applications page.
       required:
       - name
       - slug
@@ -47428,6 +47434,9 @@ components:
           $ref: '#/components/schemas/PolicyEngineMode'
         group:
           type: string
+        meta_hide:
+          type: boolean
+          description: Hide this application from the user's My applications page.
     PatchedAuthenticatorDuoStageRequest:
       type: object
       description: AuthenticatorDuoStage Serializer
